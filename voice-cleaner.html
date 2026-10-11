@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Voice Recorder &amp; Cleaner</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--blue:#1A73E8;--blue2:#4285F4;--ink:#202124;--body:#3C4043;--muted:#5F6368;--line:#E3E6EA;--panel:#F1F3F4;--coral:#E66859;--lb:#DDEAFD}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,sans-serif;color:var(--ink);background:#F8F9FA;font-size:14px}
+.wrap{max-width:1080px;margin:0 auto;padding:28px 16px 60px}
+h1{font-size:26px;letter-spacing:-.02em;margin:0 0 4px;font-weight:700}
+h1 span{color:var(--blue)}
+.sub{color:var(--muted);margin:0 0 22px}
+.grid{display:grid;grid-template-columns:1.05fr .95fr;gap:16px;align-items:start}
+@media(max-width:820px){.grid{grid-template-columns:1fr}}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px}
+.card h2{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--blue);margin:0 0 14px;font-weight:600}
+.rec-row{display:flex;align-items:center;gap:18px}
+#recBtn{width:84px;height:84px;border-radius:50%;border:none;background:var(--blue);color:#fff;font:600 13px Inter,sans-serif;cursor:pointer;flex:none;box-shadow:0 4px 14px rgba(26,115,232,.3);transition:.15s}
+#recBtn:hover{transform:scale(1.04)}
+#recBtn.on{background:var(--coral);box-shadow:0 0 0 8px rgba(230,104,89,.18)}
+#timer{font-size:30px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.meter{height:8px;background:var(--panel);border-radius:4px;overflow:hidden;margin-top:8px;width:100%}
+.meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--blue2) 70%,#F3C671 85%,var(--coral));transition:width .05s}
+.field{display:flex;flex-direction:column;gap:5px;margin-top:14px}
+.field label,.lab{font-size:12px;color:var(--muted);font-weight:500}
+input[type=text],select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);width:100%}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{font:500 13px Inter,sans-serif;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--panel)}
+.btn.pri{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.pri:hover{background:#1765cc}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.sm{padding:5px 10px;font-size:12px}
+.btn.del{color:var(--coral)}
+.tip{background:var(--lb);color:#174ea6;border-radius:8px;padding:9px 12px;font-size:12.5px;margin-top:14px;line-height:1.45}
+.set{display:grid;grid-template-columns:1fr auto;gap:2px 10px;margin-bottom:12px}
+.set .v{font-size:12px;color:var(--blue);font-weight:600;font-variant-numeric:tabular-nums}
+.set input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--blue)}
+.checks{display:flex;flex-wrap:wrap;gap:8px 16px;margin:4px 0 14px}
+.checks label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--body);cursor:pointer}
+.checks input{accent-color:var(--blue)}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.list-head{display:flex;align-items:center;justify-content:space-between;margin:26px 0 10px;gap:10px;flex-wrap:wrap}
+.list-head h2{font-size:18px;margin:0;letter-spacing:-.01em}
+.take{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:12px}
+.take-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.take-head input{flex:1;min-width:160px;font-weight:600}
+.meta{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.waves{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+@media(max-width:640px){.waves{grid-template-columns:1fr}}
+.wave{background:var(--panel);border-radius:10px;padding:8px 10px}
+.wave canvas{width:100%;height:64px;display:block}
+.wave .lab{display:flex;justify-content:space-between;margin-bottom:4px}
+.wave audio{width:100%;height:34px;margin-top:6px}
+.status{font-size:12px;color:var(--blue);font-weight:500}
+.empty{text-align:center;color:var(--muted);padding:34px;border:1.5px dashed var(--line);border-radius:14px;background:#fff}
+kbd{font:600 11px Inter,sans-serif;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Voice Recorder <span>&amp; Cleaner</span></h1>
+  <p class="sub">Record narration takes, then auto-remove noise, cut long silences, balance and amplify the voice. Everything runs locally in your browser.</p>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Record</h2>
+      <div class="rec-row">
+        <button id="recBtn">REC</button>
+        <div style="flex:1">
+          <div id="timer">00:00.0</div>
+          <div class="meter"><i id="meterBar"></i></div>
+          <div class="lab" id="recHint" style="margin-top:6px">Press <kbd>Space</kbd> to start / stop</div>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field"><label for="takeName">Next take name</label><input type="text" id="takeName" value="Slide 01"></div>
+        <div class="field"><label for="micSel">Microphone</label><select id="micSel"><option value="">Default microphone</option></select></div>
+      </div>
+      <div class="field" style="flex-direction:row;gap:8px;align-items:center">
+        <button class="btn" id="importBtn">Import audio files…</button>
+        <input type="file" id="fileIn" accept="audio/*,video/*" multiple hidden>
+        <span class="lab">WAV, MP3, M4A, WEBM…</span>
+      </div>
+      <div class="tip">Tip: stay silent for about 1 second at the start of each take. The cleaner learns the room noise from the quietest parts, so a clean pause gives better noise removal.</div>
+    </div>
+
+    <div class="card">
+      <h2>Processing</h2>
+      <div class="checks">
+        <label><input type="checkbox" id="c_denoise" checked> Remove noise</label>
+        <label><input type="checkbox" id="c_cut" checked> Cut silence</label>
+        <label><input type="checkbox" id="c_hp" checked> Low-cut (rumble)</label>
+        <label><input type="checkbox" id="c_bns"> Browser mic suppression</label>
+      </div>
+      <div class="set"><span class="lab">Noise reduction strength</span><span class="v" id="v_nr"></span><input type="range" id="s_nr" min="0" max="100" step="5"></div>
+      <div class="set"><span class="lab">Silence threshold (dB below voice)</span><span class="v" id="v_sens"></span><input type="range" id="s_sens" min="15" max="50" step="1"></div>
+      <div class="set"><span class="lab">Cut pauses longer than</span><span class="v" id="v_minSil"></span><input type="range" id="s_minSil" min="0.2" max="2" step="0.05"></div>
+      <div class="set"><span class="lab">…and shorten them to</span><span class="v" id="v_keep"></span><input type="range" id="s_keep" min="0.1" max="1" step="0.05"></div>
+      <div class="set"><span class="lab">Balance (compression)</span><span class="v" id="v_comp"></span><input type="range" id="s_comp" min="0" max="100" step="5"></div>
+      <div class="set"><span class="lab">Target voice loudness</span><span class="v" id="v_target"></span><input type="range" id="s_target" min="-24" max="-12" step="1"></div>
+      <div class="actions">
+        <button class="btn pri" id="applyAll">Apply to all takes</button>
+        <button class="btn" id="resetSet">Reset defaults</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="list-head">
+    <h2>Takes <span class="meta" id="count"></span></h2>
+    <div class="actions">
+      <button class="btn" id="zipRaw" disabled>Download originals (.zip)</button>
+      <button class="btn pri" id="zipAll" disabled>Download all cleaned (.zip)</button>
+    </div>
+  </div>
+  <div id="list"><div class="empty">No takes yet. Press REC or import audio files.</div></div>
+</div>
+
+<script>
+/*DSP-START*/
+const dbToLin = d => Math.pow(10, d / 20);
+
+function makeFFT(n){
+  const bits = Math.log2(n), rev = new Uint32Array(n);
+  for (let i = 0; i < n; i++){ let r = 0, x = i; for (let b = 0; b < bits; b++){ r = (r << 1) | (x & 1); x >>= 1; } rev[i] = r; }
+  const cs = new Float32Array(n/2), sn = new Float32Array(n/2);
+  for (let i = 0; i < n/2; i++){ cs[i] = Math.cos(2*Math.PI*i/n); sn[i] = Math.sin(2*Math.PI*i/n); }
+  return function(re, im, inv){
+    for (let i = 0; i < n; i++){ const j = rev[i]; if (j > i){ let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; } }
+    for (let size = 2; size <= n; size <<= 1){
+      const half = size >> 1, step = n / size;
+      for (let i = 0; i < n; i += size){
+        for (let j = 0, k = 0; j < half; j++, k += step){
+          const c = cs[k], s = inv ? sn[k] : -sn[k], a = i + j, b = a + half;
+          const tr = re[b]*c - im[b]*s, ti = re[b]*s + im[b]*c;
+          re[b] = re[a] - tr; im[b] = im[a] - ti; re[a] += tr; im[a] += ti;
+        }
+      }
+    }
+    if (inv) for (let i = 0; i < n; i++){ re[i] /= n; im[i] /= n; }
+  };
+}
+
+function removeDC(x){ let m = 0; for (let i = 0; i < x.length; i++) m += x[i]; m /= (x.length || 1); for (let i = 0; i < x.length; i++) x[i] -= m; }
+
+function frameDbs(x, sr, ms){
+  const n = Math.max(1, Math.round(sr*ms/1000)), m = Math.floor(x.length / n), d = new Float32Array(m);
+  for (let f = 0; f < m; f++){ let s = 0; for (let i = f*n, e = i + n; i < e; i++) s += x[i]*x[i]; d[f] = 10*Math.log10(s/n + 1e-12); }
+  return { d, n };
+}
+function pct(arr, p){ if (!arr.length) return -120; const a = Float32Array.from(arr).sort(); return a[Math.min(a.length-1, Math.floor(p*(a.length-1)))]; }
+
+function speechLevel(x, sr){
+  const { d } = frameDbs(x, sr, 20); if (!d.length) return -Infinity;
+  const floor = pct(d, .1), top = pct(d, .95), thr = Math.max(floor + 10, top - 25);
+  let s = 0, c = 0; for (const v of d) if (v > thr){ s += Math.pow(10, v/10); c++; }
+  return c ? 10*Math.log10(s/c) : -Infinity;
+}
+
+// Spectral noise reduction: learns the noise from the quietest frames, then subtracts it.
+function denoise(x, sr, strength){
+  const N = sr > 32000 ? 2048 : 1024, H = N/4, len = x.length;
+  if (len < N*2 || strength <= 0) return x;
+  const fft = makeFFT(N), bins = N/2 + 1, win = new Float32Array(N);
+  for (let i = 0; i < N; i++) win[i] = 0.5 - 0.5*Math.cos(2*Math.PI*i/N);
+  const re = new Float32Array(N), im = new Float32Array(N);
+
+  // 1. noise profile from the quietest 10% of frames
+  const cand = [];
+  for (let s = 0; s + N <= len; s += H){ let e = 0; for (let i = 0; i < N; i++) e += x[s+i]*x[s+i]; cand.push([e, s]); }
+  cand.sort((a, b) => a[0] - b[0]);
+  const take = Math.max(3, Math.floor(cand.length*0.1)), noise = new Float32Array(bins);
+  for (let c = 0; c < take; c++){
+    const s = cand[c][1];
+    for (let i = 0; i < N; i++){ re[i] = x[s+i]*win[i]; im[i] = 0; }
+    fft(re, im, false);
+    for (let k = 0; k < bins; k++) noise[k] += (re[k]*re[k] + im[k]*im[k]) / take;
+  }
+
+  // 2. STFT -> gain -> overlap-add
+  const alpha = 1 + strength*2.0, floorG = dbToLin(-(6 + strength*22));
+  const xin = new Float32Array(len + 2*N); xin.set(x, N);
+  const out = new Float32Array(xin.length), norm = new Float32Array(xin.length);
+  const g = new Float32Array(bins), gs = new Float32Array(bins).fill(1), gTmp = new Float32Array(bins);
+  for (let s = 0; s + N <= xin.length; s += H){
+    for (let i = 0; i < N; i++){ re[i] = xin[s+i]*win[i]; im[i] = 0; }
+    fft(re, im, false);
+    for (let k = 0; k < bins; k++){
+      const p = re[k]*re[k] + im[k]*im[k] + 1e-20;
+      gTmp[k] = Math.max(floorG, Math.sqrt(Math.max(0, 1 - alpha*noise[k]/p)));
+    }
+    for (let k = 0; k < bins; k++){ const a = gTmp[k > 0 ? k-1 : k], b = gTmp[k], c = gTmp[k < bins-1 ? k+1 : k]; g[k] = 0.25*a + 0.5*b + 0.25*c; }
+    for (let k = 0; k < bins; k++){ gs[k] = g[k] > gs[k] ? g[k] : gs[k]*0.55 + g[k]*0.45; }
+    for (let k = 0; k < bins; k++){
+      re[k] *= gs[k]; im[k] *= gs[k];
+      if (k > 0 && k < N/2){ re[N-k] *= gs[k]; im[N-k] *= gs[k]; }
+    }
+    fft(re, im, true);
+    for (let i = 0; i < N; i++){ out[s+i] += re[i]*win[i]; norm[s+i] += win[i]*win[i]; }
+  }
+  const y = new Float32Array(len);
+  for (let i = 0; i < len; i++){ const nn = norm[i+N]; y[i] = nn > 1e-6 ? out[i+N]/nn : 0; }
+  return y;
+}
+
+// Shortens long pauses and trims leading/trailing silence.
+function cutSilence(x, sr, s){
+  const { d, n } = frameDbs(x, sr, 10), m = d.length; if (m < 20) return x;
+  const floor = pct(d, .1), top = pct(d, .95), thr = Math.max(floor + 6, top - s.sens);
+  const v = new Uint8Array(m); for (let i = 0; i < m; i++) v[i] = d[i] > thr ? 1 : 0;
+  // drop clicks shorter than 30 ms
+  for (let i = 0; i < m;){ if (!v[i]){ i++; continue; } let j = i; while (j < m && v[j]) j++; if (j - i < 3) for (let k = i; k < j; k++) v[k] = 0; i = j; }
+  // hold 80 ms around speech so soft consonants survive
+  const pad = 8, vv = new Uint8Array(m);
+  for (let i = 0; i < m; i++) if (v[i]) for (let k = Math.max(0, i-pad); k <= Math.min(m-1, i+pad); k++) vv[k] = 1;
+  if (!vv.some(Boolean)) return x;
+  const keep = new Uint8Array(m).fill(1), minF = Math.round(s.minSil*100), keepF = Math.round(s.keep*100), edgeF = 15;
+  for (let i = 0; i < m;){
+    if (vv[i]){ i++; continue; }
+    let j = i; while (j < m && !vv[j]) j++;
+    const L = j - i;
+    if (i === 0){ if (L > edgeF) keep.fill(0, 0, L - edgeF); }
+    else if (j === m){ if (L > edgeF) keep.fill(0, i + edgeF, m); }
+    else if (L >= minF && L > keepF){ const h = Math.floor(keepF/2); keep.fill(0, i + h, j - (keepF - h)); }
+    i = j;
+  }
+  const segs = [];
+  for (let i = 0; i < m;){
+    if (!keep[i]){ i++; continue; }
+    let j = i; while (j < m && keep[j]) j++;
+    segs.push([i*n, j === m ? x.length : j*n]); i = j;
+  }
+  let total = 0; for (const [a, b] of segs) total += b - a;
+  const y = new Float32Array(total), fadeN = Math.round(sr*0.008);
+  let o = 0;
+  segs.forEach(([a, b], si) => {
+    const L = b - a, f = Math.min(fadeN, Math.floor(L/2));
+    for (let i = 0; i < L; i++){
+      let gn = 1;
+      if (si > 0 && i < f) gn = i/f;
+      if (si < segs.length-1 && i >= L - f) gn = Math.min(gn, (L - 1 - i)/f);
+      y[o + i] = x[a + i]*gn;
+    }
+    o += L;
+  });
+  return y;
+}
+
+// Look-ahead peak limiter.
+function limiter(x, sr, ceil){
+  const n = x.length, la = Math.max(1, Math.round(sr*0.005));
+  const req = new Float32Array(n);
+  for (let i = 0; i < n; i++){ const a = Math.abs(x[i]); req[i] = a > ceil ? ceil/a : 1; }
+  const gmin = new Float32Array(n), dq = new Int32Array(n); let h = 0, t = 0;
+  for (let i = n-1; i >= 0; i--){
+    while (t > h && req[dq[t-1]] >= req[i]) t--;
+    dq[t++] = i;
+    while (dq[h] > i + la) h++;
+    gmin[i] = req[dq[h]];
+  }
+  const rel = 1 - Math.exp(-1/(sr*0.06)); let env = 1;
+  for (let i = 0; i < n; i++){
+    const gg = gmin[i]; env = gg < env ? gg : env + (gg - env)*rel;
+    let y = x[i]*env; if (y > ceil) y = ceil; else if (y < -ceil) y = -ceil; x[i] = y;
+  }
+  return x;
+}
+
+function scaleTo(x, sr, targetDb, maxGainDb){
+  const lv = speechLevel(x, sr); if (!isFinite(lv)) return x;
+  const gn = dbToLin(Math.min(maxGainDb, targetDb - lv));
+  for (let i = 0; i < x.length; i++) x[i] *= gn;
+  return x;
+}
+
+function encodeWav(x, sr){
+  const n = x.length, buf = new ArrayBuffer(44 + n*2), v = new DataView(buf);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o+i, s.charCodeAt(i)); };
+  w(0,'RIFF'); v.setUint32(4, 36 + n*2, true); w(8,'WAVE'); w(12,'fmt ');
+  v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true); v.setUint32(24,sr,true);
+  v.setUint32(28,sr*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true); w(36,'data'); v.setUint32(40,n*2,true);
+  for (let i = 0; i < n; i++){ const s = Math.max(-1, Math.min(1, x[i])); v.setInt16(44 + i*2, s < 0 ? s*0x8000 : s*0x7FFF, true); }
+  return new Uint8Array(buf);
+}
+
+const CRC = (() => { const t = new Uint32Array(256); for (let i = 0; i < 256; i++){ let c = i; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[i] = c >>> 0; } return t; })();
+function crc32(u8){ let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+
+function makeZip(files){ // [{name, data:Uint8Array}] -> array of Uint8Array parts
+  const enc = new TextEncoder(), parts = [], central = []; let off = 0;
+  for (const f of files){
+    const nm = enc.encode(f.name), crc = crc32(f.data), sz = f.data.length;
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0,0x04034b50,true); lh.setUint16(4,20,true); lh.setUint16(6,0x0800,true); lh.setUint16(8,0,true);
+    lh.setUint16(10,0,true); lh.setUint16(12,33,true); lh.setUint32(14,crc,true); lh.setUint32(18,sz,true); lh.setUint32(22,sz,true);
+    lh.setUint16(26,nm.length,true); lh.setUint16(28,0,true);
+    parts.push(new Uint8Array(lh.buffer), nm, f.data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0,0x02014b50,true); ch.setUint16(4,20,true); ch.setUint16(6,20,true); ch.setUint16(8,0x0800,true); ch.setUint16(10,0,true);
+    ch.setUint16(12,0,true); ch.setUint16(14,33,true); ch.setUint32(16,crc,true); ch.setUint32(20,sz,true); ch.setUint32(24,sz,true);
+    ch.setUint16(28,nm.length,true); ch.setUint32(42,off,true);
+    central.push(new Uint8Array(ch.buffer), nm);
+    off += 30 + nm.length + sz;
+  }
+  let cdSize = 0; for (const c of central) cdSize += c.length;
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0,0x06054b50,true); end.setUint16(8,files.length,true); end.setUint16(10,files.length,true);
+  end.setUint32(12,cdSize,true); end.setUint32(16,off,true);
+  return [...parts, ...central, new Uint8Array(end.buffer)];
+}
+/*DSP-END*/
+
+// ---------- Settings ----------
+const DEFAULTS = { nr:60, sens:35, minSil:0.5, keep:0.3, comp:50, target:-16, denoise:true, cut:true, hp:true, bns:false };
+const fmt = { nr:v=>v+'%', sens:v=>v+' dB', minSil:v=>(+v).toFixed(2)+' s', keep:v=>(+v).toFixed(2)+' s', comp:v=>v+'%', target:v=>v+' dB' };
+const $ = s => document.querySelector(s);
+function loadSettings(){ try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('vc_settings') || '{}')); } catch(e){ return { ...DEFAULTS }; } }
+function applySettingsToUI(s){
+  for (const k of Object.keys(fmt)){ $('#s_'+k).value = s[k]; $('#v_'+k).textContent = fmt[k](s[k]); }
+  for (const k of ['denoise','cut','hp','bns']) $('#c_'+k).checked = s[k];
+}
+function getSettings(){
+  const s = {}; for (const k of Object.keys(fmt)) s[k] = parseFloat($('#s_'+k).value);
+  for (const k of ['denoise','cut','hp','bns']) s[k] = $('#c_'+k).checked;
+  return s;
+}
+function saveSettings(){ try { localStorage.setItem('vc_settings', JSON.stringify(getSettings())); } catch(e){} }
+applySettingsToUI(loadSettings());
+for (const k of Object.keys(fmt)) $('#s_'+k).addEventListener('input', e => { $('#v_'+k).textContent = fmt[k](e.target.value); saveSettings(); });
+for (const k of ['denoise','cut','hp','bns']) $('#c_'+k).addEventListener('change', saveSettings);
+$('#resetSet').onclick = () => { applySettingsToUI(DEFAULTS); saveSettings(); };
+
+// ---------- Audio context ----------
+let actx = null;
+const ac = () => actx || (actx = new (window.AudioContext || window.webkitAudioContext)());
+
+async function filterComp(x, sr, s){
+  if (x.length < 256 || (!s.hp && s.comp <= 0)) return x;
+  const oc = new OfflineAudioContext(1, x.length, sr);
+  const b = oc.createBuffer(1, x.length, sr); b.copyToChannel(x, 0);
+  const src = oc.createBufferSource(); src.buffer = b; let node = src;
+  if (s.hp){ const hp = oc.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 80; hp.Q.value = 0.707; node.connect(hp); node = hp; }
+  if (s.comp > 0){
+    const a = s.comp/100, c = oc.createDynamicsCompressor();
+    c.threshold.value = -20 - a*14; c.ratio.value = 1.5 + a*4.5; c.knee.value = 8; c.attack.value = 0.008; c.release.value = 0.18;
+    node.connect(c); node = c;
+  }
+  node.connect(oc.destination); src.start();
+  const r = await oc.startRendering();
+  return r.getChannelData(0).slice();
+}
+
+async function processAudio(raw, sr, s){
+  let x = raw.slice();
+  removeDC(x);
+  if (s.denoise && s.nr > 0) x = denoise(x, sr, s.nr/100);
+  scaleTo(x, sr, -20, 40);           // bring to a known level before compression
+  x = await filterComp(x, sr, s);
+  if (s.cut) x = cutSilence(x, sr, s);
+  scaleTo(x, sr, s.target, 40);      // amplify to target loudness
+  limiter(x, sr, dbToLin(-1));       // keep peaks under -1 dBFS
+  return x;
+}
+
+// ---------- Takes ----------
+const takes = []; let uid = 0;
+const sleep = () => new Promise(r => setTimeout(r, 0));
+const dur = (n, sr) => (n/sr).toFixed(1) + ' s';
+const safe = n => (n.trim() || 'take').replace(/[\\/:*?"<>|]+/g, '_');
+
+function bumpName(){
+  const el = $('#takeName'), m = el.value.match(/^(.*?)(\d+)(\D*)$/);
+  if (m) el.value = m[1] + String(+m[2] + 1).padStart(m[2].length, '0') + m[3];
+}
+
+function toMono(buf){
+  const n = buf.length, ch = buf.numberOfChannels, out = new Float32Array(n);
+  for (let c = 0; c < ch; c++){ const d = buf.getChannelData(c); for (let i = 0; i < n; i++) out[i] += d[i]/ch; }
+  return out;
+}
+
+async function addTake(name, audioBuf){
+  const t = { id: ++uid, name, sr: audioBuf.sampleRate, raw: toMono(audioBuf), proc: null, rawUrl: null, procUrl: null, busy: false };
+  t.rawWav = encodeWav(t.raw, t.sr);
+  t.rawUrl = URL.createObjectURL(new Blob([t.rawWav], { type: 'audio/wav' }));
+  takes.push(t); render();
+  await processTake(t);
+}
+
+async function processTake(t){
+  t.busy = true; renderTake(t); await sleep();
+  try {
+    t.proc = await processAudio(t.raw, t.sr, getSettings());
+    if (t.procUrl) URL.revokeObjectURL(t.procUrl);
+    t.procWav = encodeWav(t.proc, t.sr);
+    t.procUrl = URL.createObjectURL(new Blob([t.procWav], { type: 'audio/wav' }));
+  } catch(e){ console.error(e); t.err = 'Processing failed: ' + e.message; }
+  t.busy = false; renderTake(t); updateHead();
+}
+
+function download(name, blob){
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+function drawWave(cv, x, color){
+  const dpr = window.devicePixelRatio || 1, w = cv.clientWidth || 300, h = cv.clientHeight || 64;
+  cv.width = w*dpr; cv.height = h*dpr; const g = cv.getContext('2d'); g.scale(dpr, dpr); g.clearRect(0, 0, w, h);
+  g.fillStyle = '#C9CED6'; g.fillRect(0, h/2, w, 1);
+  if (!x || !x.length) return;
+  g.fillStyle = color; const step = x.length / w;
+  for (let px = 0; px < w; px++){
+    let mn = 0, mx = 0; const a = Math.floor(px*step), b = Math.min(x.length, Math.floor((px+1)*step));
+    for (let i = a; i < b; i++){ const s = x[i]; if (s < mn) mn = s; if (s > mx) mx = s; }
+    const y1 = h/2 - mx*h/2, y2 = h/2 - mn*h/2; g.fillRect(px, y1, 1, Math.max(1, y2 - y1));
+  }
+}
+
+function render(){
+  const list = $('#list'); list.innerHTML = '';
+  if (!takes.length){ list.innerHTML = '<div class="empty">No takes yet. Press REC or import audio files.</div>'; updateHead(); return; }
+  for (const t of takes){ const el = document.createElement('div'); el.className = 'take'; el.id = 'take' + t.id; list.appendChild(el); renderTake(t); }
+  updateHead();
+}
+
+function renderTake(t){
+  const el = document.getElementById('take' + t.id); if (!el) return;
+  el.innerHTML = `
+    <div class="take-head">
+      <input type="text" value="">
+      <span class="meta">${dur(t.raw.length, t.sr)}${t.proc ? ' → ' + dur(t.proc.length, t.sr) : ''}</span>
+      <span class="status">${t.busy ? 'Processing…' : (t.err || '')}</span>
+      <button class="btn sm" data-a="re" ${t.busy ? 'disabled' : ''}>Re-process</button>
+      <button class="btn sm pri" data-a="dl" ${!t.proc || t.busy ? 'disabled' : ''}>Download WAV</button>
+      <button class="btn sm del" data-a="rm">Delete</button>
+    </div>
+    <div class="waves">
+      <div class="wave"><div class="lab"><span>Original</span><a href="#" data-a="dlraw" style="color:var(--muted)">save</a></div><canvas></canvas><audio controls preload="none"></audio></div>
+      <div class="wave"><div class="lab"><span style="color:var(--blue)">Cleaned</span><span></span></div><canvas></canvas><audio controls preload="none"></audio></div>
+    </div>`;
+  const inp = el.querySelector('input'); inp.value = t.name; inp.oninput = () => { t.name = inp.value; };
+  const [c1, c2] = el.querySelectorAll('canvas'), [a1, a2] = el.querySelectorAll('audio');
+  a1.src = t.rawUrl; if (t.procUrl && !t.busy) a2.src = t.procUrl;
+  requestAnimationFrame(() => { drawWave(c1, t.raw, '#9AA0A6'); drawWave(c2, t.busy ? null : t.proc, '#1A73E8'); });
+  el.querySelectorAll('[data-a]').forEach(b => b.onclick = e => {
+    e.preventDefault(); const a = b.dataset.a;
+    if (a === 're') processTake(t);
+    if (a === 'dl') download(safe(t.name) + '.wav', new Blob([t.procWav], { type: 'audio/wav' }));
+    if (a === 'dlraw') download(safe(t.name) + '_original.wav', new Blob([t.rawWav], { type: 'audio/wav' }));
+    if (a === 'rm'){ if (!confirm('Delete "' + t.name + '"?')) return; URL.revokeObjectURL(t.rawUrl); if (t.procUrl) URL.revokeObjectURL(t.procUrl); takes.splice(takes.indexOf(t), 1); render(); }
+  });
+}
+
+function updateHead(){
+  $('#count').textContent = takes.length ? '(' + takes.length + ')' : '';
+  $('#zipAll').disabled = !takes.some(t => t.proc && !t.busy);
+  $('#zipRaw').disabled = !takes.length;
+}
+
+function uniqueNames(list, suffix){
+  const used = {}; return list.map(t => { let n = safe(t.name) + suffix; if (used[n]){ used[n]++; n = n.replace(/\.wav$/, '') + '_' + used[n] + '.wav'; } else used[n] = 1; return n; });
+}
+$('#zipAll').onclick = () => {
+  const ok = takes.filter(t => t.proc && !t.busy), names = uniqueNames(ok, '.wav');
+  download('cleaned_voice.zip', new Blob(makeZip(ok.map((t, i) => ({ name: names[i], data: t.procWav }))), { type: 'application/zip' }));
+};
+$('#zipRaw').onclick = () => {
+  const names = uniqueNames(takes, '_original.wav');
+  download('original_voice.zip', new Blob(makeZip(takes.map((t, i) => ({ name: names[i], data: t.rawWav }))), { type: 'application/zip' }));
+};
+$('#applyAll').onclick = async () => { for (const t of takes) await processTake(t); };
+
+// ---------- Import ----------
+$('#importBtn').onclick = () => $('#fileIn').click();
+$('#fileIn').onchange = async e => {
+  for (const f of e.target.files){
+    try { const buf = await ac().decodeAudioData(await f.arrayBuffer()); await addTake(f.name.replace(/\.[^.]+$/, ''), buf); }
+    catch(err){ alert('Could not read ' + f.name + ': ' + err.message); }
+  }
+  e.target.value = '';
+};
+
+// ---------- Recording ----------
+let stream = null, mr = null, chunks = [], t0 = 0, raf = 0, analyser = null, recording = false;
+
+async function listMics(){
+  try {
+    const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput');
+    const sel = $('#micSel'), cur = sel.value;
+    sel.innerHTML = '<option value="">Default microphone</option>' + devs.filter(d => d.deviceId && d.deviceId !== 'default').map((d, i) => `<option value="${d.deviceId}">${(d.label || 'Microphone ' + (i+1)).replace(/</g,'&lt;')}</option>`).join('');
+    sel.value = cur;
+  } catch(e){}
+}
+listMics();
+
+async function startRec(){
+  if (!navigator.mediaDevices || !window.MediaRecorder){ alert('This browser cannot record audio. Try Chrome or Edge.'); return; }
+  const s = getSettings(), audio = { echoCancellation: false, noiseSuppression: s.bns, autoGainControl: false, channelCount: 1 };
+  if ($('#micSel').value) audio.deviceId = { exact: $('#micSel').value };
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio }); }
+  catch(e){ alert('Microphone access was blocked (' + e.name + '). Allow the microphone for this page and try again. If you opened the file directly and it keeps failing, serve it from localhost.'); return; }
+  listMics();
+  const a = ac(); await a.resume();
+  const srcN = a.createMediaStreamSource(stream); analyser = a.createAnalyser(); analyser.fftSize = 1024; srcN.connect(analyser);
+  chunks = []; mr = new MediaRecorder(stream);
+  mr.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+  mr.onstop = onStop; mr.start(250);
+  recording = true; t0 = performance.now();
+  $('#recBtn').classList.add('on'); $('#recBtn').textContent = 'STOP'; $('#recHint').textContent = 'Recording "' + $('#takeName').value + '"…';
+  tick();
+}
+function tick(){
+  const el = (performance.now() - t0)/1000, m = Math.floor(el/60), s = el - m*60;
+  $('#timer').textContent = String(m).padStart(2,'0') + ':' + s.toFixed(1).padStart(4,'0');
+  const buf = new Float32Array(analyser.fftSize); analyser.getFloatTimeDomainData(buf);
+  let pk = 0; for (const v of buf) pk = Math.max(pk, Math.abs(v));
+  const db = 20*Math.log10(pk + 1e-9); $('#meterBar').style.width = Math.max(0, Math.min(100, (db + 60)/60*100)) + '%';
+  raf = requestAnimationFrame(tick);
+}
+function stopRec(){
+  recording = false; cancelAnimationFrame(raf); $('#meterBar').style.width = '0';
+  $('#recBtn').classList.remove('on'); $('#recBtn').textContent = 'REC'; $('#recHint').innerHTML = 'Press <kbd>Space</kbd> to start / stop';
+  if (mr && mr.state !== 'inactive') mr.stop();
+}
+async function onStop(){
+  stream.getTracks().forEach(t => t.stop());
+  const name = $('#takeName').value || 'Take'; bumpName();
+  try {
+    const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
+    const buf = await ac().decodeAudioData(await blob.arrayBuffer());
+    await addTake(name, buf);
+  } catch(e){ alert('Could not decode the recording: ' + e.message); }
+}
+$('#recBtn').onclick = () => recording ? stopRec() : startRec();
+document.addEventListener('keydown', e => {
+  if (e.code !== 'Space' || e.repeat) return;
+  const tag = (document.activeElement || {}).tagName;
+  if (['INPUT','SELECT','TEXTAREA','BUTTON','AUDIO'].includes(tag)) return;
+  e.preventDefault(); recording ? stopRec() : startRec();
+});
+window.addEventListener('resize', () => takes.forEach(renderTake));
+window.addEventListener('beforeunload', e => { if (takes.length){ e.preventDefault(); e.returnValue = ''; } });
+</script>
+</body>
+</html>
