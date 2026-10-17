@@ -110,6 +110,19 @@ input[type=text],select{font:inherit;padding:8px 10px;border:1px solid var(--lin
 .takeinfo canvas{width:100%;height:48px;display:block;background:var(--panel);border-radius:8px;margin-top:8px}
 .sliders{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:16px}
 @media(max-width:700px){.sliders{grid-template-columns:1fr}}
+.sybox img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;transition:opacity .4s ease;background:#fff}
+.sybox .slabel,.sybox .rectag{z-index:2}
+.sy-next{display:flex;gap:12px;align-items:center}
+.sy-next .im{flex:none;width:150px;aspect-ratio:16/9;border-radius:8px;background:var(--panel) center/cover no-repeat;box-shadow:0 0 0 1px var(--line)}
+.sy-next b{display:block;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sy-notes{font-size:var(--nfs,22px);line-height:1.5;color:var(--body);margin-top:14px;max-height:300px;overflow:auto;white-space:pre-wrap}
+.sy-next-btn{font-size:16px;padding:16px 26px;border-radius:12px}
+.sy-over{width:100%;height:54px;display:block;background:var(--panel);border-radius:8px;margin-top:16px;cursor:pointer;touch-action:none}
+.sy-detail{width:100%;height:120px;display:block;background:var(--panel);border-radius:8px;margin-top:8px;cursor:crosshair;touch-action:none}
+.sy-zoomrow{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
+.sy-zoomrow select{font:inherit;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;width:auto}
+.btn.pri kbd{background:rgba(255,255,255,.22);border-color:transparent;color:#fff}
+#syTapTag{background:var(--blue)}
 .stripbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:16px}
 .stripbar .lab{margin-right:4px;font-weight:600}
 .strip{display:flex;gap:10px;overflow-x:auto;padding:4px 2px 12px;margin-top:8px}
@@ -135,7 +148,7 @@ kbd{font:600 11px Inter,sans-serif;background:var(--panel);border:1px solid var(
 <div class="wrap">
   <h1>Voice Recorder <span>&amp; Slide Narration</span></h1>
   <p class="sub">Record narration, auto-remove noise, cut long silences, balance and amplify the voice, then turn your slides into a video. Everything runs locally in your browser.</p>
-  <div class="tabs"><button class="tab on" data-mode="quick">Quick takes</button><button class="tab" data-mode="slides">Slide narration</button></div>
+  <div class="tabs"><button class="tab on" data-mode="quick">Quick takes</button><button class="tab" data-mode="slides">Slide narration</button><button class="tab" data-mode="sync">Sync to audio</button></div>
 
   <section id="mode-quick">
   <div class="grid">
@@ -274,7 +287,7 @@ kbd{font:600 11px Inter,sans-serif;background:var(--panel);border:1px solid var(
       </div>
       <div class="strip" id="nStrip"></div>
 
-      <div class="card" style="margin-top:6px">
+      <div id="musicSlotSlides"><div class="card" id="musicCard" style="margin-top:6px">
         <h2>Background music</h2>
         <div class="ctl-row">
           <div style="flex:1;min-width:220px"><div class="st" id="mName" style="font-weight:600"></div><div class="lab" id="mInfo"></div></div>
@@ -292,7 +305,7 @@ kbd{font:600 11px Inter,sans-serif;background:var(--panel);border:1px solid var(
           <span class="lab" style="align-self:center">Plays up to 60 s of the final mix (voice + music) from the current slide.</span>
         </div>
         <input type="file" id="mIn" accept="audio/*" hidden>
-      </div>
+      </div></div>
 
       <div class="card" style="margin-top:16px">
         <h2>Export</h2>
@@ -315,6 +328,90 @@ kbd{font:600 11px Inter,sans-serif;background:var(--panel);border:1px solid var(
     <input type="file" id="nAudioIn" accept="audio/*,video/*" hidden>
     <input type="file" id="nImgIn" accept="image/png,image/jpeg,image/webp" multiple hidden>
   </section>
+
+<section id="mode-sync" hidden>
+  <div id="syNoSlides" class="dropzone">
+    <h2>Sync slides to one audio file</h2>
+    <p>Load your slides first (Slide Studio zip or images in order). They are shared with the Slide narration tab. Then load your full recording and tap through the slides while it plays.</p>
+    <div class="actions" style="justify-content:center">
+      <button class="btn pri" id="syLoadZip">Upload slide zip…</button>
+      <button class="btn" id="syLoadImgs">Start from slide images…</button>
+    </div>
+  </div>
+
+  <div id="syWork" hidden>
+    <div class="warn" id="syWarn" hidden></div>
+    <div class="nbar">
+      <div class="ttl"><b id="syTitle"></b><span id="sySub"></span></div>
+      <span class="total" id="syTotal"></span>
+    </div>
+
+    <div class="card">
+      <h2>Full audio</h2>
+      <div class="ctl-row">
+        <div style="flex:1;min-width:220px"><div class="st" id="syAName" style="font-weight:600"></div><div class="lab" id="syAInfo"></div></div>
+        <div class="actions">
+          <button class="btn pri" id="syALoad">Load audio file…</button>
+          <button class="btn" id="syReclean">Re-clean with current settings</button>
+          <button class="btn" id="syDlAudio">Download cleaned audio</button>
+        </div>
+      </div>
+      <div class="lab" style="margin-top:8px">The audio is cleaned once with the Voice processing settings (bottom of this page) before you sync: noise, balance, loudness and pause shortening. You sync to the cleaned version, so the timing can't drift.</div>
+    </div>
+
+    <div class="ngrid" style="margin-top:16px">
+      <div class="slidebox sybox"><img id="syImgA" alt=""><img id="syImgB" alt="" style="opacity:0"><span class="slabel" id="syLabel"></span><span class="rectag" id="syTapTag" hidden></span></div>
+      <div class="card notes">
+        <div class="hd"><h2>Coming up next</h2></div>
+        <div class="sy-next"><div class="im" id="syNextIm"></div><div style="min-width:0"><b id="syNextT"></b><div class="lab" id="syNextN"></div></div></div>
+        <div class="sy-notes" id="syNextNotes"></div>
+      </div>
+    </div>
+
+    <div class="card ctl">
+      <div class="ctl-row">
+        <button class="rbtn" id="syPlay">PLAY</button>
+        <div style="min-width:170px"><div id="syTime" style="font-size:24px;font-weight:600;font-variant-numeric:tabular-nums">0:00.0</div><div class="lab" id="syHint"></div></div>
+        <button class="btn pri sy-next-btn" id="syNext">Next slide ▸ <kbd>Space</kbd></button>
+        <div class="actions">
+          <button class="btn" id="syBack">↺ 5 s</button>
+          <button class="btn" id="syUndo">Undo last <kbd>⌫</kbd></button>
+          <button class="btn del" id="syReset">Clear all changes</button>
+        </div>
+      </div>
+      <canvas id="syOver" class="sy-over"></canvas>
+      <div class="sy-zoomrow"><span class="lab">Detail view</span>
+        <select id="syZoom"><option value="10">10 s</option><option value="30">30 s</option><option value="60">60 s</option></select>
+        <span class="lab">Drag a blue marker to adjust a slide change. Click anywhere to listen from there. Scroll to pan.</span></div>
+      <canvas id="syDetail" class="sy-detail"></canvas>
+      <div class="sliders" style="grid-template-columns:1fr 1fr">
+        <div class="set" style="margin:0"><span class="lab">Reaction delay (each tap is moved earlier by)</span><span class="v" id="syDelayv"></span><input type="range" id="syDelay" min="0" max="0.6" step="0.05"></div>
+        <div class="checks" style="margin:0;align-self:center"><label><input type="checkbox" id="sySnap"> Snap slide changes to the nearest pause (never mid-word)</label></div>
+      </div>
+      <div class="lab" style="margin-top:10px">Shortcuts: <kbd>Space</kbd> next slide (plays if paused), <kbd>P</kbd> play / pause, <kbd>⌫</kbd> undo last, <kbd>←</kbd> <kbd>→</kbd> back / forward 5 s. Tapping replaces any slide changes after that point; to fix just one, drag its marker.</div>
+    </div>
+
+    <div class="strip" id="syStrip"></div>
+    <div id="syMusicSlot"></div>
+
+    <div class="card" style="margin-top:16px">
+      <h2>Export</h2>
+      <div class="xgrid">
+        <div class="set" style="margin:0"><span class="lab">Master volume</span><span class="v" id="syMasterv"></span><input type="range" id="syMaster" min="-12" max="6" step="0.5"></div>
+        <div class="field" style="margin:0"><label for="syTrans">Transition</label><select id="syTrans"><option value="xf">Cross-fade 0.4 s</option><option value="cut">Hard cut</option></select></div>
+        <div class="field" style="margin:0"><label for="syRes">Resolution</label><select id="syRes"></select></div>
+      </div>
+      <div class="actions" style="margin-top:16px">
+        <button class="btn pri" id="syVideo">Export video</button>
+        <button class="btn" id="syTimings">Export timings (.json)</button>
+        <button class="btn" id="syTimingsLoad">Load timings…</button>
+      </div>
+    </div>
+    <div id="procSlotSync" style="margin-top:16px"></div>
+  </div>
+  <input type="file" id="syAIn" accept="audio/*,video/*" hidden>
+  <input type="file" id="syTIn" accept=".json,application/json" hidden>
+</section>
 </div>
 
 <div class="modal" id="xModal" hidden>
@@ -799,6 +896,7 @@ document.addEventListener('change', e => { if (['range','checkbox','file'].inclu
 document.addEventListener('keydown', e => {
   const tag = (document.activeElement || {}).tagName;
   if (['INPUT','SELECT','TEXTAREA','AUDIO'].includes(tag) || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (mode === 'sync') return typeof syKey === 'function' ? syKey(e) : undefined;
   if (mode === 'slides') return nKey(e);
   if (e.code !== 'Space' && e.code !== 'KeyP') return;
   e.preventDefault();
@@ -811,13 +909,15 @@ function setMode(m){
   if (recording || arming){ alert('Stop recording first.'); return; }
   mode = m;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.mode === m));
-  $('#mode-quick').hidden = m !== 'quick'; $('#mode-slides').hidden = m !== 'slides';
-  (m === 'quick' ? $('#procSlotQuick') : $('#procSlotSlides')).appendChild($('#procCard'));
+  $('#mode-quick').hidden = m !== 'quick'; $('#mode-slides').hidden = m !== 'slides'; $('#mode-sync').hidden = m !== 'sync';
+  (m === 'quick' ? $('#procSlotQuick') : m === 'sync' ? $('#procSlotSync') : $('#procSlotSlides')).appendChild($('#procCard'));
+  (m === 'sync' ? $('#syMusicSlot') : $('#musicSlotSlides')).appendChild($('#musicCard'));
+  if (typeof syOnMode === 'function') syOnMode(m);
   try { localStorage.setItem('vc_mode', m); } catch(e){}
 }
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => setMode(t.dataset.mode));
 window.addEventListener('resize', () => { takes.forEach(renderTake); if (typeof nDrawWave === 'function') nDrawWave(); });
-window.addEventListener('beforeunload', e => { if (takes.length || NS.exporting){ e.preventDefault(); e.returnValue = ''; } });
+window.addEventListener('beforeunload', e => { if (takes.length || NS.exporting || (typeof SY !== 'undefined' && SY.cleaning)){ e.preventDefault(); e.returnValue = ''; } });
 </script>
 <script>
 // ================= Slide narration =================
@@ -851,6 +951,7 @@ const dbGet = k => kv(false, st => st.get(k));
 const dbSet = (k, v) => kv(true, st => st.put(v, k));
 const dbDel = k => kv(true, st => st.delete(k));
 const dbClear = () => kv(true, st => st.clear());
+async function dbClearKeep(keys){ const keep = []; for (const k of keys){ const v = await dbGet(k); if (v) keep.push([k, v]); } await dbClear(); for (const [k, v] of keep) await dbSet(k, v); }
 function storageWarn(e){
   console.warn(e); const w = $('#nWarn'); w.hidden = false;
   w.textContent = 'Could not save to browser storage (' + (e && e.message || e) + '). Your work is still here, but download an audio package before closing the page.';
@@ -908,7 +1009,7 @@ async function loadZip(file){
     if (!confirm('This zip is a different chapter. Loading it removes the current slides and their ' + NS.slides.filter(hasTake).length + ' recording(s). Continue?')) return;
   }
   try {
-    if (NS.key !== key){ const mus = await dbGet('music'); await dbClear(); if (mus) await dbSet('music', mus); }
+    if (NS.key !== key){ await dbClearKeep(['music', 'sync']); }
     await dbSet('project', proj);
   } catch(e){ storageWarn(e); }
   let meta = null; try { meta = NS.key === key ? await dbGet('meta') : null; } catch(e){}
@@ -931,6 +1032,7 @@ async function openProject(p, meta){
   if (!NS.music) loadMusicFromDb(); else renderMusic();
   saveMeta();
   (async () => { for (const s of NS.slides) if (s.take && !s.take.proc && s.take.raw && !s.busy) await nProcess(s); })();
+  if (typeof syOnProject === 'function') syOnProject();
 }
 
 async function makeThumbs(){
@@ -941,6 +1043,7 @@ async function makeThumbs(){
       const c = document.createElement('canvas'); c.width = b.width; c.height = b.height; c.getContext('2d').drawImage(b, 0, 0); b.close();
       s.thumb = URL.createObjectURL(await new Promise(r => c.toBlob(r, 'image/jpeg', 0.8)));
       const el = document.querySelector('#nStrip [data-i="' + NS.slides.indexOf(s) + '"] .im'); if (el) el.style.backgroundImage = 'url(' + s.thumb + ')';
+      const el2 = document.querySelector('#syStrip [data-i="' + NS.slides.indexOf(s) + '"] .im'); if (el2) el2.style.backgroundImage = 'url(' + s.thumb + ')';
     } catch(e){}
   }
 }
@@ -1138,6 +1241,7 @@ $('#nClear').onclick = async () => {
   nStopPlay();
   for (const s of NS.slides){ s.url && URL.revokeObjectURL(s.url); s.thumb && URL.revokeObjectURL(s.thumb); s.previewUrl && URL.revokeObjectURL(s.previewUrl); }
   NS.slides = []; NS.key = null; NS.manifest = null; NS.cur = 0; NS.music = null;
+  if (typeof syClearAll === 'function') syClearAll();
   try { await dbClear(); } catch(e){}
   $('#nWork').hidden = true; $('#nEmpty').hidden = false; $('#nErr').textContent = '';
 };
@@ -1167,7 +1271,7 @@ async function saveProject(){
   try { await dbSet('project', proj); } catch(e){ storageWarn(e); }
   saveMeta();
 }
-function slidesChanged(){ reindex(); nShowSlide(); renderStrip(); renderTotal(); makeThumbs(); saveProject(); }
+function slidesChanged(){ reindex(); nShowSlide(); renderStrip(); renderTotal(); makeThumbs(); saveProject(); if (typeof syRender === 'function') syRender(); }
 function sizeWarn(imgs){
   const off = imgs.filter(i => Math.abs(i.w/i.h - NS.W/NS.H) > 0.02);
   if (off.length) alert(off.length + ' image(s) are not ' + NS.W + '×' + NS.H + ' (16:9). They will be centred with white bars in the video:\n' + off.map(i => i.file.name + ' (' + i.w + '×' + i.h + ')').join('\n'));
@@ -1180,7 +1284,7 @@ async function startFromImages(files){
   const key = 'img|' + Date.now();
   const proj = { key, name: imgs.length + ' slide images', manifest: null, W, H,
     slides: imgs.map((im, i) => { const sl = newSlide(im); URL.revokeObjectURL(sl.url); return { id: 'slide-' + pad2(i + 1), index: i + 1, file: 'slides/' + im.file.name, title: sl.title, layout: '', notes: '', blob: sl.blob }; }) };
-  try { const mus = await dbGet('music'); await dbClear(); if (mus) await dbSet('music', mus); await dbSet('project', proj); } catch(e){ storageWarn(e); }
+  try { await dbClearKeep(['music', 'sync']); await dbSet('project', proj); } catch(e){ storageWarn(e); }
   await openProject(proj, null);
 }
 $('#nStartImgs').onclick = () => { imgMode = 'start'; $('#nImgIn').click(); };
@@ -1311,7 +1415,11 @@ function buildMix(tl, totalSamples, from = 0, len = totalSamples - from, want = 
     const i0 = Math.max(0, -off), i1 = Math.min(p.length, len - off);
     for (let i = i0; i < i1; i++) v[off + i] += p[i]*g;
   }
-  const out = {};
+  return finishMix(v, from, len, totalSamples, want);
+}
+// v = voice already scaled by master volume. Adds music (with ducking and fades) and limits peaks.
+function finishMix(v, from, len, totalSamples, want = {}){
+  const mg = dbToLin(NS.opts.master), out = {};
   if (!NS.music){
     limiter(v, SR_OUT, dbToLin(-1));
     out.voice = out.L = out.R = v; return out;
@@ -1437,6 +1545,9 @@ $('#xVideo').onclick = async () => {
   if (!NS.slides.length || !(await waitReady())) return;
   const missing = NS.slides.filter(s => !hasTake(s)).length;
   if (missing && !confirm(missing + ' slide(s) have no recording. They will be shown for ' + NS.opts.defDur + ' s with silence.\n\nExport anyway?')) return;
+  await exportVideo(timeline(), (tl, total) => buildMix(tl, total));
+};
+async function exportVideo(tl, mixFn){
   const [W, H] = outSize();
   modal('Exporting video', W + '×' + H + ' · 30 fps');
   $('#xText').textContent = 'Checking what this browser can encode…';
@@ -1447,9 +1558,9 @@ $('#xVideo').onclick = async () => {
   NS.exporting = true; xAbort = false; renderCtl();
   let venc, aenc, base = null; const bmps = new Map();
   try {
-    const tl = timeline(), nF = Math.max(1, Math.round(tl.total*FPS)), spf = SR_OUT / FPS, totalSamples = nF*spf;
+    const nF = Math.max(1, Math.round(tl.total*FPS)), spf = SR_OUT / FPS, totalSamples = nF*spf;
     $('#xText').textContent = 'Mixing audio…'; await sleep();
-    const mx = buildMix(tl, totalSamples), mixL = mx.L, mixR = mx.R;
+    const mx = mixFn(tl, totalSamples), mixL = mx.L, mixR = mx.R;
     const M = plan.box === 'mp4' ? Mp4Muxer : WebMMuxer, target = new M.ArrayBufferTarget();
     const muxer = plan.box === 'mp4'
       ? new Mp4Muxer.Muxer({ target, video: { codec: 'avc', width: W, height: H, frameRate: FPS }, audio: { codec: 'aac', numberOfChannels: 2, sampleRate: SR_OUT }, fastStart: 'in-memory', firstTimestampBehavior: 'offset' })
@@ -1531,9 +1642,9 @@ $('#xVideo').onclick = async () => {
     for (const b of bmps.values()) b.close();
     try { venc && venc.state !== 'closed' && venc.close(); } catch(e){}
     try { aenc && aenc.state !== 'closed' && aenc.close(); } catch(e){}
-    renderCtl();
+    renderCtl(); if (typeof syRender === 'function') syRender();
   }
-};
+}
 
 // ---------- Restore on load ----------
 (async () => {
@@ -1543,6 +1654,380 @@ $('#xVideo').onclick = async () => {
   catch(e){ console.warn('restore failed', e); }
 })();
 </script>
+<script>
+// ================= Sync to audio =================
+const SY = { proc: null, name: '', bytes: null, marks: [], delay: 0.25, snap: true, zoom: 30, projKey: null,
+             audio: null, url: null, cleaning: false, pk: null, gaps: [], v0: 0, drag: -1, shown: -1, front: 'A', raf: 0, tapT: 0 };
+const syDur = () => SY.proc ? SY.proc.length / SR_OUT : 0;
+const syN = () => NS.slides.length;
+const syPlaying = () => !!(SY.audio && !SY.audio.paused);
+const syNow = () => SY.audio ? SY.audio.currentTime : 0;
+function sySlideAt(t){ let k = 0; while (k < SY.marks.length && SY.marks[k] <= t) k++; return Math.min(k, Math.max(0, syN() - 1)); }
+
+// ---------- persistence ----------
+let syMarkT = 0;
+function sySaveMarks(){
+  clearTimeout(syMarkT);
+  syMarkT = setTimeout(() => dbSet('syncMarks', { marks: SY.marks, delay: SY.delay, snap: SY.snap, zoom: SY.zoom, projKey: SY.projKey }).catch(syWarn), 300);
+}
+async function sySaveAudio(){
+  const q = new Int16Array(SY.proc.length);
+  for (let i = 0; i < q.length; i++){ const v = Math.max(-1, Math.min(1, SY.proc[i])); q[i] = v < 0 ? v*0x8000 : v*0x7FFF; }
+  try { await dbSet('sync', { name: SY.name, bytes: SY.bytes, pcm: q.buffer }); } catch(e){ syWarn(e); }
+}
+function syWarn(e){ console.warn(e); const w = $('#syWarn'); w.hidden = false; w.textContent = 'Could not save to browser storage (' + (e && e.message || e) + '). Export your timings before closing the page.'; }
+
+// ---------- audio loading and cleaning ----------
+async function syLoadFile(f){
+  if (SY.cleaning) return;
+  if (SY.marks.length && !confirm('Loading a new audio file clears your slide changes. Continue?')) return;
+  let bytes, buf;
+  try { bytes = await f.arrayBuffer(); buf = await ac().decodeAudioData(bytes.slice(0)); }
+  catch(e){ return alert('Could not read ' + f.name + ': ' + (e.message || e)); }
+  SY.name = f.name; SY.bytes = bytes;
+  await syClean(toMono(buf), buf.sampleRate, true);
+}
+async function syClean(raw, sr, resetMarks){
+  syStop(); SY.cleaning = true; syRender();
+  $('#syAInfo').textContent = 'Cleaning ' + fmtT(raw.length/sr).replace(/\.\d$/, '') + ' of audio… a long file can take 20–60 seconds.';
+  await new Promise(r => setTimeout(r, 60));
+  try {
+    let p = await processAudio(raw, sr, getSettings());
+    if (sr !== SR_OUT) p = await resampleTo(p, sr, SR_OUT);
+    SY.proc = p;
+    if (resetMarks){ SY.marks = []; SY.projKey = NS.key; sySaveMarks(); }
+    syPrepare();
+    await sySaveAudio();
+  } catch(e){ console.error(e); alert('Cleaning failed: ' + e.message); }
+  SY.cleaning = false; syRender();
+}
+function syPrepare(){
+  const x = SY.proc, F = 480, m = Math.floor(x.length / F);
+  // 10 ms peak map for drawing
+  const pk = new Float32Array(m);
+  for (let f = 0; f < m; f++){ let mx = 0; for (let i = f*F, e = i + F; i < e; i++){ const a = x[i] < 0 ? -x[i] : x[i]; if (a > mx) mx = a; } pk[f] = mx; }
+  SY.pk = pk;
+  // pauses (for snapping and shading)
+  const { d } = frameDbs(x, SR_OUT, 10), floor = pct(d, .1), top = pct(d, .95), thr = Math.max(floor + 8, top - 28);
+  SY.db = d; SY.gaps = [];
+  for (let i = 0; i < d.length;){
+    if (d[i] > thr){ i++; continue; }
+    let j = i; while (j < d.length && d[j] <= thr) j++;
+    if (j - i >= 12) SY.gaps.push([i/100, j/100]);
+    i = j;
+  }
+  if (SY.url) URL.revokeObjectURL(SY.url);
+  SY.url = URL.createObjectURL(new Blob([encodeWav(x, SR_OUT)], { type: 'audio/wav' }));
+  SY.audio = new Audio(SY.url); SY.audio.preload = 'auto';
+  SY.audio.onplay = SY.audio.onpause = SY.audio.onended = () => { syRenderTransport(); if (syPlaying()) syLoop(); };
+  SY.v0 = 0; SY.shown = -1;
+}
+
+// ---------- snapping ----------
+function sySnapTo(m){
+  let best = m, bestD = 0.7;
+  for (const [a, b] of SY.gaps){
+    if (a - 0.7 > m) break;
+    if (b + 0.7 < m) continue;
+    const L = b - a, lo = L >= 0.5 ? a + 0.2 : (a + b)/2, hi = L >= 0.5 ? b - 0.2 : (a + b)/2;
+    const c = Math.max(lo, Math.min(hi, m)), dd = Math.abs(c - m);
+    if (dd <= bestD){ bestD = dd; best = c; }
+  }
+  if (bestD < 0.7 || !SY.db) return best;
+  // no real pause nearby: use the quietest moment within 0.4 s (a gap between words)
+  const d = SY.db, c0 = Math.round(m*100), lo = Math.max(2, c0 - 40), hi = Math.min(d.length - 3, c0 + 40);
+  let bi = c0, bv = Infinity;
+  for (let i = lo; i <= hi; i++){
+    const v = (d[i-2] + d[i-1] + d[i] + d[i+1] + d[i+2])/5 + Math.abs(i - c0)*0.02;
+    if (v < bv){ bv = v; bi = i; }
+  }
+  return bi/100;
+}
+
+// ---------- transport ----------
+function syPlayPause(){
+  if (!SY.audio || SY.cleaning) return;
+  if (syPlaying()) SY.audio.pause();
+  else { if (SY.audio.ended || syNow() >= syDur() - 0.05) SY.audio.currentTime = 0; SY.audio.play().catch(() => {}); }
+}
+function syStop(){ if (SY.audio) SY.audio.pause(); }
+function sySeek(t){
+  if (!SY.audio) return;
+  t = Math.max(0, Math.min(syDur() - 0.01, t));
+  SY.audio.currentTime = t;
+  if (!syPlaying()) SY.v0 = Math.max(0, t - SY.zoom*0.3);
+  syFrame();
+}
+function syTap(){
+  if (!SY.audio || SY.cleaning || NS.exporting) return;
+  if (!syPlaying()) return syPlayPause();
+  const t = syNow(); let m = Math.max(0.2, t - SY.delay);
+  SY.marks = SY.marks.filter(x => x < m - 0.3);
+  if (SY.marks.length >= syN() - 1){ syFlash('Last slide already showing'); return; }
+  if (SY.snap) m = sySnapTo(m);
+  const prev = SY.marks.length ? SY.marks[SY.marks.length - 1] : 0;
+  m = Math.max(m, prev + 0.3);
+  if (m >= syDur() - 0.2) return;
+  SY.marks.push(m);
+  syFlash('Slide ' + (SY.marks.length + 1) + ' ▸');
+  sySaveMarks(); syFrame(); syRenderStrip(); syRenderTotal();
+}
+function syUndo(){ if (!SY.marks.length) return; SY.marks.pop(); sySaveMarks(); syFrame(); syRenderStrip(); syRenderTotal(); }
+function syFlash(txt){ const el = $('#syTapTag'); el.textContent = txt; el.hidden = false; clearTimeout(SY.tapT); SY.tapT = setTimeout(() => el.hidden = true, 700); }
+function syKey(e){
+  if ($('#syWork').hidden || !$('#xModal').hidden) return;
+  if (e.code === 'Space'){ e.preventDefault(); syTap(); }
+  else if (e.code === 'KeyP'){ e.preventDefault(); syPlayPause(); }
+  else if (e.code === 'Backspace'){ e.preventDefault(); syUndo(); }
+  else if (e.code === 'ArrowLeft'){ e.preventDefault(); sySeek(syNow() - 5); }
+  else if (e.code === 'ArrowRight'){ e.preventDefault(); sySeek(syNow() + 5); }
+}
+
+// ---------- live preview ----------
+function syShow(k){
+  if (k === SY.shown || !NS.slides[k]) return;
+  const instant = SY.shown < 0 || !NS.opts.xfade, tok = SY.tok = (SY.tok || 0) + 1;
+  SY.shown = k;
+  const front = SY.front === 'A' ? $('#syImgA') : $('#syImgB'), back = SY.front === 'A' ? $('#syImgB') : $('#syImgA');
+  back.style.transition = 'none'; back.style.opacity = 0; back.src = NS.slides[k].url;
+  const go = () => {
+    if (tok !== SY.tok) return;
+    back.style.zIndex = 1; front.style.zIndex = 0; void back.offsetWidth;
+    back.style.transition = instant ? 'none' : ''; back.style.opacity = 1;
+    SY.front = SY.front === 'A' ? 'B' : 'A';
+    setTimeout(() => { if (tok === SY.tok){ front.style.transition = 'none'; front.style.opacity = 0; } }, instant ? 0 : 450);
+  };
+  (back.decode ? back.decode() : Promise.resolve()).then(go, go);
+  $('#syLabel').textContent = 'Slide ' + (k + 1) + ' / ' + syN();
+  const nx = NS.slides[k + 1];
+  $('#syNextIm').style.backgroundImage = nx ? 'url(' + (nx.thumb || nx.url) + ')' : 'none';
+  $('#syNextT').textContent = nx ? 'Slide ' + (k + 2) + (nx.title ? ' · ' + nx.title : '') : 'This is the last slide';
+  $('#syNextN').textContent = nx ? (SY.marks.length >= k + 1 ? 'Starts at ' + fmtT(SY.marks[k]) : 'Press Space when you start talking about it') : '';
+  $('#syNextNotes').textContent = nx ? (nx.notes || '') : '';
+  document.querySelectorAll('#syStrip .thumb').forEach((b, i) => b.classList.toggle('cur', i === k));
+}
+function syFrame(){
+  if ($('#syWork').hidden) return;
+  const t = syNow();
+  $('#syTime').textContent = fmtT(t) + ' / ' + fmtT(syDur());
+  if (syPlaying() && SY.drag < 0){ if (t < SY.v0 || t > SY.v0 + SY.zoom*0.85) SY.v0 = Math.max(0, t - SY.zoom*0.15); }
+  syShow(sySlideAt(t));
+  syDrawOver(); syDrawDetail();
+}
+function syLoop(){ cancelAnimationFrame(SY.raf); const f = () => { syFrame(); if (syPlaying()) SY.raf = requestAnimationFrame(f); }; SY.raf = requestAnimationFrame(f); }
+
+// ---------- drawing ----------
+function syCanvas(cv){
+  const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== Math.round(w*dpr) || cv.height !== Math.round(h*dpr)){ cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr); }
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  return { g, w, h };
+}
+function syWave(g, w, h, t0, t1, color){
+  const pk = SY.pk; if (!pk) return;
+  const fps = 100, mid = h/2; g.fillStyle = color;
+  for (let x = 0; x < w; x++){
+    const a = Math.floor((t0 + (t1 - t0)*x/w)*fps), b = Math.max(a + 1, Math.floor((t0 + (t1 - t0)*(x + 1)/w)*fps));
+    let mx = 0; for (let i = Math.max(0, a); i < Math.min(pk.length, b); i++) if (pk[i] > mx) mx = pk[i];
+    const hh = Math.max(1, mx*(h*0.46)); g.fillRect(x, mid - hh, 1, hh*2);
+  }
+}
+function syDrawOver(){
+  const { g, w, h } = syCanvas($('#syOver')), D = syDur(); if (!D) return;
+  syWave(g, w, h, 0, D, '#B0B6BE');
+  const X = t => t/D*w;
+  g.fillStyle = 'rgba(26,115,232,.12)'; g.fillRect(X(SY.v0), 0, Math.max(2, X(SY.zoom)), h);
+  g.fillStyle = '#1A73E8'; for (const m of SY.marks) g.fillRect(Math.round(X(m)), 0, 1.5, h);
+  g.fillStyle = '#E66859'; g.fillRect(Math.round(X(syNow())) - 1, 0, 2, h);
+}
+function syDrawDetail(){
+  const { g, w, h } = syCanvas($('#syDetail')), D = syDur(); if (!D) return;
+  const t0 = SY.v0, t1 = t0 + SY.zoom, X = t => (t - t0)/SY.zoom*w;
+  g.fillStyle = 'rgba(26,115,232,.07)';
+  for (const [a, b] of SY.gaps){ if (b < t0) continue; if (a > t1) break; g.fillRect(X(a), 0, X(b) - X(a), h); }
+  syWave(g, w, h, t0, t1, '#8A9099');
+  g.fillStyle = '#5F6368'; g.font = '10px Inter, sans-serif';
+  const step = SY.zoom <= 10 ? 1 : SY.zoom <= 30 ? 5 : 10;
+  for (let s = Math.ceil(t0/step)*step; s < t1; s += step){ const x = Math.round(X(s)); g.fillRect(x, h - 6, 1, 6); g.fillText(fmtT(s).replace(/\.\d$/, ''), x + 3, h - 2); }
+  SY.marks.forEach((m, i) => {
+    if (m < t0 - 1 || m > t1 + 1) return;
+    const x = Math.round(X(m)), on = i === SY.drag;
+    g.fillStyle = on ? '#E66859' : '#1A73E8'; g.fillRect(x - 1, 0, 2, h);
+    if (NS.opts.xfade){ g.fillStyle = on ? 'rgba(230,104,89,.15)' : 'rgba(26,115,232,.15)'; g.fillRect(X(m - 0.2), 0, X(m + 0.2) - X(m - 0.2), h); }
+    const lbl = String(i + 2), tw = g.measureText(lbl).width + 10;
+    g.fillStyle = on ? '#E66859' : '#1A73E8'; g.beginPath(); g.roundRect ? g.roundRect(x - tw/2, 3, tw, 16, 8) : g.rect(x - tw/2, 3, tw, 16); g.fill();
+    g.fillStyle = '#fff'; g.font = '600 11px Inter, sans-serif'; g.fillText(lbl, x - tw/2 + 5, 15); g.font = '10px Inter, sans-serif';
+  });
+  const p = syNow(); if (p >= t0 && p <= t1){ g.fillStyle = '#E66859'; g.fillRect(Math.round(X(p)) - 1, 0, 2, h); }
+}
+
+// ---------- timeline interaction ----------
+(() => {
+  const ov = $('#syOver'), dt = $('#syDetail');
+  const tAt = (cv, e, t0, span) => t0 + (e.clientX - cv.getBoundingClientRect().left)/cv.clientWidth*span;
+  ov.addEventListener('pointerdown', e => { if (!SY.proc) return; const t = tAt(ov, e, 0, syDur()); sySeek(t); SY.v0 = Math.max(0, Math.min(syDur() - SY.zoom, t - SY.zoom/2)); syFrame(); });
+  const near = e => {
+    const r = dt.getBoundingClientRect(), x = e.clientX - r.left;
+    let best = -1, bd = 8;
+    SY.marks.forEach((m, i) => { const mx = (m - SY.v0)/SY.zoom*dt.clientWidth, dd = Math.abs(mx - x); if (dd < bd){ bd = dd; best = i; } });
+    return best;
+  };
+  dt.addEventListener('pointerdown', e => {
+    if (!SY.proc) return;
+    const i = near(e);
+    if (i >= 0){ SY.drag = i; dt.setPointerCapture(e.pointerId); syFrame(); return; }
+    sySeek(tAt(dt, e, SY.v0, SY.zoom));
+  });
+  dt.addEventListener('pointermove', e => {
+    if (SY.drag < 0){ dt.style.cursor = near(e) >= 0 ? 'ew-resize' : 'crosshair'; return; }
+    const i = SY.drag, lo = (i ? SY.marks[i - 1] : 0) + 0.3, hi = (i < SY.marks.length - 1 ? SY.marks[i + 1] : syDur()) - 0.3;
+    SY.marks[i] = Math.max(lo, Math.min(hi, tAt(dt, e, SY.v0, SY.zoom)));
+    syFrame();
+  });
+  const end = () => { if (SY.drag < 0) return; SY.drag = -1; sySaveMarks(); SY.shown = -1; syFrame(); syRenderStrip(); };
+  dt.addEventListener('pointerup', end); dt.addEventListener('pointercancel', end);
+  dt.addEventListener('wheel', e => {
+    if (!SY.proc) return; e.preventDefault();
+    SY.v0 = Math.max(0, Math.min(Math.max(0, syDur() - SY.zoom), SY.v0 + (e.deltaX || e.deltaY)/dt.clientWidth*SY.zoom));
+    syFrame();
+  }, { passive: false });
+})();
+
+// ---------- render ----------
+function syTimeline(){
+  const D = syDur(), n = Math.min(syN(), SY.marks.length + 1), items = [];
+  for (let i = 0; i < n; i++){ const a = i ? SY.marks[i - 1] : 0, b = i < n - 1 ? SY.marks[i] : D; items.push({ s: NS.slides[i], start: a, dur: b - a, has: true }); }
+  return { items, total: D };
+}
+function syRenderTotal(){
+  const n = syN(), placed = Math.min(SY.marks.length, Math.max(0, n - 1));
+  $('#syTotal').textContent = SY.proc ? fmtT(syDur()) + ' · ' + placed + ' / ' + Math.max(0, n - 1) + ' slide changes placed' : 'No audio yet';
+}
+function syRenderStrip(){
+  const el = $('#syStrip');
+  el.innerHTML = NS.slides.map((s, i) => {
+    const st = i === 0 ? 0 : SY.marks[i - 1], ok = i === 0 || st != null;
+    return `<button class="thumb${i === SY.shown ? ' cur' : ''}" data-i="${i}" title="${esc(s.title)}">
+      <div class="im" style="${s.thumb ? 'background-image:url(' + s.thumb + ')' : ''}"></div>
+      <div class="m2"><span><span class="dot${ok && SY.proc ? ' ok' : ''}"></span>${pad2(i + 1)}</span><span>${ok && SY.proc ? fmtT(st) : '—'}</span></div></button>`;
+  }).join('');
+  el.querySelectorAll('.thumb').forEach(b => b.onclick = () => { const i = +b.dataset.i, st = i === 0 ? 0 : SY.marks[i - 1]; if (st != null && SY.proc) sySeek(st + 0.01); });
+}
+function syRenderTransport(){
+  const has = !!SY.proc && !SY.cleaning, play = syPlaying();
+  $('#syPlay').textContent = play ? 'PAUSE' : 'PLAY'; $('#syPlay').classList.toggle('on', play);
+  $('#syPlay').disabled = !has; $('#syNext').disabled = !has || NS.exporting;
+  $('#syBack').disabled = $('#syUndo').disabled = !has; $('#syUndo').disabled = !has || !SY.marks.length;
+  $('#syReset').disabled = !has || !SY.marks.length;
+  $('#syHint').textContent = !SY.proc ? 'Load the full audio first' : play ? 'Press Space when the next slide should appear' : 'Press Play, or Space to start';
+}
+function syRender(){
+  if (typeof NS === 'undefined') return;
+  const has = syN() > 0;
+  $('#syNoSlides').hidden = has; $('#syWork').hidden = !has;
+  if (!has) return;
+  const m = NS.manifest || {};
+  $('#syTitle').textContent = (m.chapterLabel ? m.chapterLabel + ' · ' : '') + (m.course || 'Slides');
+  $('#sySub').textContent = syN() + ' slides · ' + NS.W + '×' + NS.H;
+  if (!SY.cleaning){
+    $('#syAName').textContent = SY.proc ? SY.name : 'No audio loaded';
+    $('#syAInfo').textContent = SY.proc ? 'Cleaned · ' + fmtT(syDur()) + ' · ' + SY.gaps.length + ' pauses found' : 'Load your full recording (MP3, M4A, WAV, OGG…).';
+  } else $('#syAName').textContent = SY.name;
+  $('#syALoad').textContent = SY.proc ? 'Replace audio…' : 'Load audio file…';
+  $('#syALoad').disabled = SY.cleaning;
+  $('#syReclean').disabled = $('#syDlAudio').disabled = !SY.proc || SY.cleaning || (!SY.bytes && true);
+  $('#syDlAudio').disabled = !SY.proc || SY.cleaning;
+  $('#syVideo').disabled = $('#syTimings').disabled = !SY.proc || SY.cleaning || NS.exporting;
+  $('#syTimingsLoad').disabled = !SY.proc || SY.cleaning;
+  $('#syDelay').value = SY.delay; $('#syDelayv').textContent = SY.delay.toFixed(2) + ' s';
+  $('#sySnap').checked = SY.snap; $('#syZoom').value = String(SY.zoom);
+  $('#syMaster').value = NS.opts.master; $('#syMasterv').textContent = (NS.opts.master > 0 ? '+' : '') + (+NS.opts.master).toFixed(1) + ' dB';
+  $('#syTrans').value = NS.opts.xfade ? 'xf' : 'cut';
+  $('#syRes').innerHTML = $('#xRes').innerHTML; $('#syRes').value = $('#xRes').value;
+  document.documentElement.style.setProperty('--nfs', NS.opts.fs + 'px');
+  SY.shown = -1; syRenderTransport(); syRenderTotal(); syRenderStrip(); syFrame();
+}
+function syOnMode(m){ if (m !== 'sync') syStop(); else setTimeout(syRender, 0); }
+function syOnProject(){
+  if (SY.projKey && SY.projKey !== NS.key && SY.marks.length){ SY.marks = []; }
+  SY.projKey = NS.key; sySaveMarks(); syRender();
+}
+function syClearAll(){ syStop(); SY.proc = null; SY.bytes = null; SY.marks = []; SY.pk = null; SY.gaps = []; if (SY.url) URL.revokeObjectURL(SY.url); SY.url = null; SY.audio = null; syRender(); }
+
+// ---------- controls ----------
+$('#syLoadZip').onclick = () => $('#nZipIn').click();
+$('#syLoadImgs').onclick = () => $('#nStartImgs').click();
+$('#syALoad').onclick = () => $('#syAIn').click();
+$('#syAIn').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) syLoadFile(f); };
+$('#syReclean').onclick = async () => {
+  if (!SY.bytes) return alert('The original file is not available. Load the audio again.');
+  if (!confirm('Re-clean the audio with the current Voice processing settings?' + (SY.marks.length ? '\n\nIf pause shortening changes, the timing changes too, so your slide changes will be cleared.' : ''))) return;
+  try { const buf = await ac().decodeAudioData(SY.bytes.slice(0)); await syClean(toMono(buf), buf.sampleRate, true); }
+  catch(e){ alert('Could not decode the original file: ' + e.message); }
+};
+$('#syDlAudio').onclick = () => download(slug(SY.name.replace(/\.[^.]+$/, '')) + '-cleaned.wav', new Blob([encodeWav(SY.proc, SR_OUT)], { type: 'audio/wav' }));
+$('#syPlay').onclick = syPlayPause;
+$('#syNext').onclick = syTap;
+$('#syBack').onclick = () => sySeek(syNow() - 5);
+$('#syUndo').onclick = syUndo;
+$('#syReset').onclick = () => { if (!confirm('Clear all slide changes?')) return; SY.marks = []; sySaveMarks(); SY.shown = -1; syRender(); };
+$('#syDelay').addEventListener('input', e => { SY.delay = parseFloat(e.target.value); $('#syDelayv').textContent = SY.delay.toFixed(2) + ' s'; sySaveMarks(); });
+$('#sySnap').addEventListener('change', e => { SY.snap = e.target.checked; sySaveMarks(); });
+$('#syZoom').onchange = e => { SY.zoom = +e.target.value; SY.v0 = Math.max(0, syNow() - SY.zoom*0.3); sySaveMarks(); syFrame(); };
+$('#syMaster').addEventListener('input', e => { NS.opts.master = parseFloat(e.target.value); $('#syMasterv').textContent = (NS.opts.master > 0 ? '+' : '') + NS.opts.master.toFixed(1) + ' dB'; renderOpts(); saveMeta(); });
+$('#syTrans').onchange = e => { NS.opts.xfade = e.target.value === 'xf'; renderOpts(); saveMeta(); syFrame(); };
+$('#syRes').onchange = e => { NS.opts.res = e.target.value; renderOpts(); saveMeta(); };
+window.addEventListener('resize', () => { if (mode === 'sync') syFrame(); });
+
+$('#syVideo').onclick = async () => {
+  if (!SY.proc) return;
+  if (recording || arming) return alert('Stop recording first.');
+  syStop();
+  const n = syN(), placed = Math.min(SY.marks.length, n - 1);
+  if (placed < n - 1 && !confirm('Only ' + (placed + 1) + ' of ' + n + ' slides are placed. Slides ' + (placed + 2) + '–' + n + ' will not appear in the video.\n\nExport anyway?')) return;
+  await exportVideo(syTimeline(), (tl, total) => {
+    const v = new Float32Array(total), g = dbToLin(NS.opts.master), p = SY.proc, k = Math.min(total, p.length);
+    for (let i = 0; i < k; i++) v[i] = p[i]*g;
+    return finishMix(v, 0, total, total, {});
+  });
+};
+$('#syTimings').onclick = () => {
+  const tl = syTimeline(), m = NS.manifest || {};
+  const out = { format: 'slide-sync-timings', version: 1, course: m.course || '', chapterLabel: m.chapterLabel || '', audio: SY.name,
+    duration: +syDur().toFixed(3), transition: NS.opts.xfade ? { type: 'crossfade', duration: 0.4 } : { type: 'cut' },
+    slides: tl.items.map((it, i) => ({ index: i + 1, id: it.s.id, image: it.s.file, title: it.s.title, start: +it.start.toFixed(3), end: +(it.start + it.dur).toFixed(3) })) };
+  download(baseName() + '-timings.json', new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' }));
+};
+$('#syTimingsLoad').onclick = () => $('#syTIn').click();
+$('#syTIn').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    const j = JSON.parse(await f.text());
+    if (j.format !== 'slide-sync-timings' || !Array.isArray(j.slides)) throw new Error('this is not a timings file from this tool');
+    const marks = j.slides.slice(1).map(s => +s.start).filter(t => isFinite(t) && t > 0 && t < syDur()).sort((a, b) => a - b);
+    if (Math.abs((j.duration || 0) - syDur()) > 0.5 && !confirm('These timings were made for audio of ' + fmtT(j.duration) + ', but the current audio is ' + fmtT(syDur()) + '. Load them anyway?')) return;
+    if (SY.marks.length && !confirm('Replace your current slide changes with the ones in this file?')) return;
+    SY.marks = marks.slice(0, Math.max(0, syN() - 1)); sySaveMarks(); syRender();
+  } catch(err){ alert('Could not load timings: ' + err.message); }
+};
+
+// ---------- restore ----------
+(async () => {
+  try {
+    const mk = await dbGet('syncMarks');
+    if (mk){ SY.marks = mk.marks || []; SY.delay = mk.delay ?? 0.25; SY.snap = mk.snap ?? true; SY.zoom = mk.zoom || 30; SY.projKey = mk.projKey || null; }
+    const a = await dbGet('sync');
+    if (a && a.pcm){
+      const q = new Int16Array(a.pcm), p = new Float32Array(q.length);
+      for (let i = 0; i < q.length; i++) p[i] = q[i] / 32768;
+      SY.proc = p; SY.name = a.name || 'audio'; SY.bytes = a.bytes || null; syPrepare();
+    }
+    if (NS.key && SY.projKey && SY.projKey !== NS.key){ SY.marks = []; SY.projKey = NS.key; sySaveMarks(); }
+  } catch(e){ console.warn('sync restore failed', e); }
+  syRender();
+})();
+</script>
+
 
 </body>
 </html>
