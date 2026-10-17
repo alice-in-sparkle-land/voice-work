@@ -274,7 +274,8 @@ kbd{font:600 11px Inter,sans-serif;background:var(--panel);border:1px solid var(
           <div class="set"><span class="lab">Extra pause after</span><span class="v" id="nPadAv"></span><input type="range" id="nPadA" min="0" max="3" step="0.1"></div>
           <div class="set"><span class="lab">Slide gain</span><span class="v" id="nGainv"></span><input type="range" id="nGain" min="-6" max="6" step="0.5"></div>
         </div>
-        <div class="lab">Shortcuts: <kbd>Space</kbd> record / stop (3-2-1 countdown), <kbd>←</kbd> <kbd>→</kbd> previous / next slide, <kbd>P</kbd> pause.</div>
+        <div class="checks" style="margin:0 0 8px"><label><input type="checkbox" id="nCdOn"> 3-2-1 countdown before recording</label></div>
+        <div class="lab">Shortcuts: <kbd>Space</kbd> record / stop, <kbd>←</kbd> <kbd>→</kbd> previous / next slide, <kbd>P</kbd> pause.</div>
       </div>
 
       <div class="stripbar">
@@ -919,7 +920,7 @@ window.addEventListener('beforeunload', e => { if (takes.length || NS.exporting 
 // ================= Slide narration =================
 const SR_OUT = 48000, FPS = 30;
 const NS = { slides: [], cur: 0, key: null, manifest: null, W: 1920, H: 1080, exporting: false,
-             opts: { master: 0, xfade: true, defDur: 3, res: 'manifest', fs: 22, musicVol: -22, duck: true } , music: null };
+             opts: { master: 0, xfade: true, defDur: 3, res: 'manifest', fs: 22, musicVol: -22, duck: true, countdown: true } , music: null };
 const pad2 = n => String(n).padStart(2, '0');
 const fmtT = sec => { sec = Math.max(0, sec || 0); const m = Math.floor(sec/60), s = sec - m*60; return m + ':' + s.toFixed(1).padStart(4, '0'); };
 const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
@@ -1105,6 +1106,7 @@ function renderOpts(){
   $('#xRes').innerHTML = opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
   $('#xRes').value = opts.some(x => x[0] === o.res) ? o.res : 'manifest';
   document.documentElement.style.setProperty('--nfs', o.fs + 'px');
+  $('#nCdOn').checked = o.countdown !== false;
 }
 
 // ---------- Navigation ----------
@@ -1126,6 +1128,7 @@ const SLIDE_UI = {
   slide: null,
   countdown(){
     renderCtl();
+    if (NS.opts.countdown === false) return Promise.resolve(true);
     return new Promise(res => {
       const el = $('#nCount'); let n = 3; el.textContent = n; el.hidden = false;
       const iv = setInterval(() => { n--; if (n <= 0){ finish(true); } else el.textContent = n; }, 1000);
@@ -1228,6 +1231,7 @@ for (const [id, k] of [['#nPadB','padB'], ['#nPadA','padA'], ['#nGain','gain']])
   });
 }
 $('#xMaster').addEventListener('input', e => { NS.opts.master = parseFloat(e.target.value); nStopPlay(); dropPreviews(); renderOpts(); saveMeta(); });
+$('#nCdOn').addEventListener('change', e => { NS.opts.countdown = e.target.checked; saveMeta(); });
 $('#xTrans').onchange = e => { NS.opts.xfade = e.target.value === 'xf'; saveMeta(); };
 $('#xDef').onchange = e => { NS.opts.defDur = Math.max(1, Math.min(15, parseFloat(e.target.value) || 3)); renderOpts(); renderStrip(); renderTotal(); saveMeta(); };
 $('#xRes').onchange = e => { NS.opts.res = e.target.value; saveMeta(); };
