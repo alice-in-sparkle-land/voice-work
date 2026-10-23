@@ -123,6 +123,13 @@ input[type=text],select{font:inherit;padding:8px 10px;border:1px solid var(--lin
 .sy-zoomrow select{font:inherit;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;width:auto}
 .btn.pri kbd{background:rgba(255,255,255,.22);border-color:transparent;color:#fff}
 #syTapTag{background:var(--blue)}
+.edbox{width:min(1100px,100%)!important;max-height:94vh;overflow:auto}
+.edhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.edscroll{overflow-x:auto;border-radius:10px;background:var(--panel)}
+.edscroll canvas{display:block;height:190px;cursor:crosshair;touch-action:none}
+.edstatus{margin-top:8px;font-size:13px;font-weight:600;color:var(--body);font-variant-numeric:tabular-nums;min-height:18px}
+.edstatus.rec{color:var(--coral)}
+.edsep{flex:1}
 .stripbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:16px}
 .stripbar .lab{margin-right:4px;font-weight:600}
 .strip{display:flex;gap:10px;overflow-x:auto;padding:4px 2px 12px;margin-top:8px}
@@ -266,6 +273,7 @@ kbd{font:600 11px Inter,sans-serif;background:var(--panel);border:1px solid var(
           <div class="actions">
             <button class="btn" id="nPlay">▶ Play take</button>
             <button class="btn" id="nUpload">Use audio file…</button>
+            <button class="btn" id="nEdit">Edit sentences</button>
             <button class="btn del" id="nDelTake">Delete take</button>
           </div>
         </div>
@@ -409,6 +417,32 @@ kbd{font:600 11px Inter,sans-serif;background:var(--panel);border:1px solid var(
   <input type="file" id="syAIn" accept="audio/*,video/*" hidden>
   <input type="file" id="syTIn" accept=".json,application/json" hidden>
 </section>
+</div>
+
+<div class="modal" id="edModal" hidden>
+  <div class="box edbox">
+    <div class="edhead">
+      <div><h3 id="edTitle">Edit sentences</h3><div class="lab" id="edSub"></div></div>
+      <button class="btn" id="edDone">Done</button>
+    </div>
+    <div class="lab" style="margin:6px 0 8px">Click a numbered sentence above the waveform, or drag across any part. Click once without dragging to set an insert point.</div>
+    <div class="edscroll" id="edScroll"><canvas id="edCanvas"></canvas></div>
+    <div class="edstatus" id="edStatus"></div>
+    <div class="actions" style="margin-top:12px">
+      <button class="btn" id="edPlay">▶ Play selection</button>
+      <button class="btn pri" id="edRec">● Re-record selection</button>
+      <button class="btn del" id="edDel">Delete selection</button>
+      <button class="btn" id="edUndo">Undo</button>
+      <span class="edsep"></span>
+      <button class="btn sm" id="edBefore">▶ Before</button>
+      <button class="btn sm" id="edAfter">▶ After</button>
+    </div>
+    <div class="checks" style="margin:12px 0 0">
+      <label><input type="checkbox" id="edPre"> Pre-roll: play 2.5 s before the selection, then start recording</label>
+      <label><input type="checkbox" id="edSnap"> Snap edges to pauses</label>
+    </div>
+    <div class="lab" style="margin-top:8px">Shortcuts: <kbd>Space</kbd> play / stop, or stop recording · <kbd>Esc</kbd> close. The new part is cleaned with the current Voice processing settings and matched in volume to the original.</div>
+  </div>
 </div>
 
 <div class="modal" id="xModal" hidden>
@@ -569,6 +603,7 @@ function cutSilence(x, sr, s, ref){
     }
     o += L;
   });
+  y.map = segs;   // which parts of the input were kept, used by the sentence editor
   return y;
 }
 
@@ -718,6 +753,7 @@ async function processTake(t){
   t.busy = true; renderTake(t); await sleep();
   try {
     t.proc = await processAudio(t.raw, t.sr, getSettings());
+    t.map = t.proc.map || [[0, t.raw.length]];
     if (t.procUrl) URL.revokeObjectURL(t.procUrl);
     t.procWav = encodeWav(t.proc, t.sr);
     t.procUrl = URL.createObjectURL(new Blob([t.procWav], { type: 'audio/wav' }));
@@ -757,6 +793,7 @@ function renderTake(t){
       <input type="text" value="">
       <span class="meta">${dur(t.raw.length, t.sr)}${t.proc ? ' → ' + dur(t.proc.length, t.sr) : ''}</span>
       <span class="status">${t.busy ? 'Processing…' : (t.err || '')}</span>
+      <button class="btn sm" data-a="ed" ${!t.proc || t.busy ? 'disabled' : ''}>Edit sentences</button>
       <button class="btn sm" data-a="re" ${t.busy ? 'disabled' : ''}>Re-process</button>
       <button class="btn sm pri" data-a="dl" ${!t.proc || t.busy ? 'disabled' : ''}>Download WAV</button>
       <button class="btn sm del" data-a="rm">Delete</button>
@@ -772,6 +809,7 @@ function renderTake(t){
   el.querySelectorAll('[data-a]').forEach(b => b.onclick = e => {
     e.preventDefault(); const a = b.dataset.a;
     if (a === 're') processTake(t);
+    if (a === 'ed' && typeof edOpen === 'function') edOpen(edAdapterQuick(t));
     if (a === 'dl') download(safe(t.name) + '.wav', new Blob([t.procWav], { type: 'audio/wav' }));
     if (a === 'dlraw') download(safe(t.name) + '_original.wav', new Blob([t.rawWav], { type: 'audio/wav' }));
     if (a === 'rm'){ if (!confirm('Delete "' + t.name + '"?')) return; URL.revokeObjectURL(t.rawUrl); if (t.procUrl) URL.revokeObjectURL(t.procUrl); takes.splice(takes.indexOf(t), 1); render(); }
@@ -893,6 +931,7 @@ document.addEventListener('change', e => { if (['range','checkbox','file'].inclu
 document.addEventListener('keydown', e => {
   const tag = (document.activeElement || {}).tagName;
   if (['INPUT','SELECT','TEXTAREA','AUDIO'].includes(tag) || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (typeof ED !== 'undefined' && ED.open) return edKey(e);
   if (mode === 'sync') return typeof syKey === 'function' ? syKey(e) : undefined;
   if (mode === 'slides') return nKey(e);
   if (e.code !== 'Space' && e.code !== 'KeyP') return;
@@ -1075,6 +1114,7 @@ function renderCtl(){
   $('#nPause').disabled = !rec; $('#nPause').classList.toggle('on', rec && paused); $('#nPause').textContent = rec && paused ? 'RESUME' : 'PAUSE';
   $('#nPlay').disabled = !hasTake(s) || busy || rec || arm; $('#nPlay').textContent = NS.playing ? '■ Stop' : '▶ Play take';
   $('#nDelTake').disabled = !hasTake(s) || busy || rec || arm;
+  $('#nEdit').disabled = !hasTake(s) || busy || rec || arm || NS.exporting;
   $('#nUpload').disabled = busy || rec || arm;
   $('#nPrev').disabled = NS.cur === 0 || rec || arm; $('#nNext').disabled = NS.cur === NS.slides.length - 1 || rec || arm;
   $('#nRecTag').hidden = !rec;
@@ -1167,11 +1207,12 @@ async function nProcess(s){
   s.busy = true; if (s === curSlide()) renderCtl(); renderStrip(); await sleep();
   try {
     let p = await processAudio(s.take.raw, s.take.sr, getSettings());
+    s.take.map = p.map || [[0, s.take.raw.length]];
     if (s.take.sr !== SR_OUT) p = await resampleTo(p, s.take.sr, SR_OUT);
     s.take.proc = p;
   } catch(e){ console.error(e); alert('Processing failed for slide ' + s.index + ': ' + e.message); }
   s.busy = false; s.previewUrl && URL.revokeObjectURL(s.previewUrl); s.previewUrl = null;
-  if (s.take.proc){ try { await dbSet(takeKey(s), { raw: s.take.raw, sr: s.take.sr, proc: s.take.proc }); } catch(e){ storageWarn(e); } }
+  if (s.take.proc){ try { await dbSet(takeKey(s), { raw: s.take.raw, sr: s.take.sr, proc: s.take.proc, map: s.take.map }); } catch(e){ storageWarn(e); } }
   if (s === curSlide()) renderCtl(); renderStrip(); renderTotal();
 }
 
@@ -2012,6 +2053,316 @@ $('#syTIn').onchange = async e => {
   syRender();
 })();
 </script>
+<script>
+// ================= Sentence editor (punch-in) =================
+const ED = { open: false, ad: null, sel: null, cursor: null, blocks: [], gaps: [], hist: [], last: null,
+             drag: null, src: null, playFrom: 0, playT0: 0, playTo: 0, raf: 0, busy: false, preCancel: null, pxPerSec: 40 };
+
+// ---------- adapters: one take, from Quick takes or Slide narration ----------
+function edAdapterQuick(t){
+  return {
+    label: t.name, get raw(){ return t.raw; }, get sr(){ return t.sr; }, get proc(){ return t.proc; },
+    get procSr(){ return t.sr; }, get map(){ return t.map; }, busy: () => t.busy,
+    async ensure(){ if (!t.map) await processTake(t); },
+    async commit(raw){
+      t.raw = raw; t.rawWav = encodeWav(raw, t.sr);
+      if (t.rawUrl) URL.revokeObjectURL(t.rawUrl);
+      t.rawUrl = URL.createObjectURL(new Blob([t.rawWav], { type: 'audio/wav' }));
+      await processTake(t);
+    },
+    restore(h){
+      t.raw = h.raw; t.proc = h.proc; t.map = h.map;
+      t.rawWav = encodeWav(t.raw, t.sr); if (t.rawUrl) URL.revokeObjectURL(t.rawUrl);
+      t.rawUrl = URL.createObjectURL(new Blob([t.rawWav], { type: 'audio/wav' }));
+      t.procWav = encodeWav(t.proc, t.sr); if (t.procUrl) URL.revokeObjectURL(t.procUrl);
+      t.procUrl = URL.createObjectURL(new Blob([t.procWav], { type: 'audio/wav' }));
+      renderTake(t);
+    }
+  };
+}
+function edAdapterSlide(s){
+  return {
+    label: 'Slide ' + (NS.slides.indexOf(s) + 1) + (s.title ? ' · ' + s.title : ''),
+    get raw(){ return s.take.raw; }, get sr(){ return s.take.sr; }, get proc(){ return s.take.proc; },
+    get procSr(){ return SR_OUT; }, get map(){ return s.take.map; }, busy: () => s.busy,
+    async ensure(){ if (!s.take.map) await nProcess(s); },
+    async commit(raw){ nStopPlay(); s.take.raw = raw; await nProcess(s); },
+    restore(h){
+      nStopPlay(); s.take.raw = h.raw; s.take.proc = h.proc; s.take.map = h.map;
+      if (s.previewUrl){ URL.revokeObjectURL(s.previewUrl); s.previewUrl = null; }
+      dbSet(takeKey(s), { raw: s.take.raw, sr: s.take.sr, proc: s.take.proc, map: s.take.map }).catch(storageWarn);
+      if (s === curSlide()) renderCtl(); renderStrip(); renderTotal();
+    }
+  };
+}
+
+// ---------- open / close ----------
+async function edOpen(ad){
+  if (recording || arming) return alert('Stop recording first.');
+  if (ad.busy()) return alert('Wait until the take has finished processing.');
+  ED.ad = ad; ED.open = true; ED.sel = null; ED.cursor = null; ED.hist = []; ED.last = null;
+  try { $('#edPre').checked = localStorage.getItem('vc_ed_pre') !== '0'; $('#edSnap').checked = localStorage.getItem('vc_ed_snap') !== '0'; }
+  catch(e){ $('#edPre').checked = true; $('#edSnap').checked = true; }
+  $('#edTitle').textContent = 'Edit sentences · ' + ad.label;
+  $('#edModal').hidden = false;
+  if (!ad.map){ ED.busy = true; edRender('Preparing the take…'); await ad.ensure(); ED.busy = false; }
+  edPrepare(); edRender();
+}
+function edClose(){
+  if (recording || arming || ED.busy) return;
+  edStop(); ED.open = false; $('#edModal').hidden = true;
+}
+
+// ---------- analysis: sentences and pauses ----------
+function edPrepare(){
+  const x = ED.ad.proc, sr = ED.ad.procSr, { d } = frameDbs(x, sr, 10), m = d.length;
+  const floor = pct(d, .1), top = pct(d, .95), thr = Math.max(floor + 8, top - 28);
+  const sp = new Uint8Array(m); for (let i = 0; i < m; i++) sp[i] = d[i] > thr ? 1 : 0;
+  ED.gaps = [];
+  for (let i = 0; i < m;){ if (sp[i]){ i++; continue; } let j = i; while (j < m && !sp[j]) j++; if (j - i >= 8) ED.gaps.push([i, j]); i = j; }
+  // sentence blocks = speech separated by pauses of 0.18 s or more
+  const runs = [];
+  for (let i = 0; i < m;){ if (!sp[i]){ i++; continue; } let j = i; while (j < m && sp[j]) j++; runs.push([i, j]); i = j; }
+  const merged = [];
+  for (const r of runs){ const last = merged[merged.length - 1]; if (last && r[0] - last[1] < 18) last[1] = r[1]; else merged.push([r[0], r[1]]); }
+  const blocks = merged.filter(b => b[1] - b[0] >= 15);
+  ED.blocks = blocks.map((b, k) => {
+    const lo = k ? blocks[k-1][1] : 0, hi = k < blocks.length - 1 ? blocks[k+1][0] : m;
+    return [Math.max(lo, b[0] - 6) * sr/100, Math.min(hi, b[1] + 8) * sr/100].map(Math.round);
+  });
+  const len = x.length; ED.len = len;
+  if (ED.sel){ ED.sel = [Math.max(0, Math.min(len, ED.sel[0])), Math.max(0, Math.min(len, ED.sel[1]))]; if (ED.sel[1] - ED.sel[0] < sr*0.05) ED.sel = null; }
+}
+function edSnap(p){
+  if (!$('#edSnap').checked) return p;
+  const sr = ED.ad.procSr, f = p / sr * 100; let best = p, bd = 50;
+  for (const [a, b] of ED.gaps){
+    const lo = a + Math.min(5, (b - a)/2), hi = b - Math.min(5, (b - a)/2), c = Math.max(lo, Math.min(hi, f)), dd = Math.abs(c - f);
+    if (dd < bd){ bd = dd; best = c / 100 * sr; }
+  }
+  return Math.round(best);
+}
+
+// ---------- mapping between what you hear and the original recording ----------
+function edToRaw(p){
+  const ad = ED.ad, q = p * ad.sr / ad.procSr, map = ad.map, tol = ad.sr * 0.012; let dst = 0;
+  for (let i = 0; i < map.length; i++){
+    const [a, b] = map[i], L = b - a;
+    if (q <= dst + L){
+      const off = q - dst;
+      if (off < tol && i > 0) return Math.round((map[i-1][1] + a) / 2);
+      if (L - off < tol && i < map.length - 1) return Math.round((b + map[i+1][0]) / 2);
+      return Math.round(a + off);
+    }
+    dst += L;
+  }
+  return ad.raw.length;
+}
+function edToProc(r){
+  const ad = ED.ad, map = ad.map; let dst = 0;
+  for (const [a, b] of map){ if (r < a) break; if (r <= b) return Math.round((dst + r - a) * ad.procSr / ad.sr); dst += b - a; }
+  return Math.round(dst * ad.procSr / ad.sr);
+}
+
+// ---------- playback ----------
+function edStop(){ if (ED.src){ try { ED.src.onended = null; ED.src.stop(); } catch(e){} ED.src = null; } cancelAnimationFrame(ED.raf); if (ED.playResolve){ ED.playResolve(); ED.playResolve = null; } edRender(); }
+function edPlayArr(arr, sr, from, to, live){
+  edStop();
+  from = Math.max(0, Math.floor(from)); to = Math.min(arr.length, Math.ceil(to));
+  if (to - from < 10) return Promise.resolve();
+  const a = ac(); a.resume();
+  const buf = a.createBuffer(1, to - from, sr); buf.copyToChannel(arr.subarray(from, to), 0);
+  const src = a.createBufferSource(); src.buffer = buf; src.connect(a.destination);
+  ED.src = src; ED.live = live; ED.playFrom = from; ED.playTo = to; ED.playT0 = a.currentTime; ED.playSr = sr;
+  return new Promise(res => {
+    ED.playResolve = res;
+    src.onended = () => { ED.src = null; cancelAnimationFrame(ED.raf); ED.playResolve = null; edRender(); res(); };
+    src.start();
+    const loop = () => { edDraw(); ED.raf = requestAnimationFrame(loop); }; loop();
+    edRender();
+  });
+}
+function edPlayhead(){ if (!ED.src || !ED.live) return null; return ED.playFrom + (ac().currentTime - ED.playT0) * ED.playSr; }
+
+// ---------- recording a replacement ----------
+const EDIT_UI = {
+  countdown(){
+    edRender();
+    const sr = ED.ad.procSr, start = ED.sel ? ED.sel[0] : ED.cursor;
+    if (!$('#edPre').checked || start == null || start < sr*0.2) return Promise.resolve(true);
+    return new Promise(res => {
+      ED.preCancel = () => { ED.preCancel = null; edStop(); res(false); };
+      edRender('Pre-roll… start speaking as soon as it stops');
+      edPlayArr(ED.ad.proc, sr, start - sr*2.5, start, true).then(() => { if (ED.preCancel){ ED.preCancel = null; res(true); } });
+    });
+  },
+  start(){ edRender(); }, stop(){ edRender(); }, pause(){ edRender(); },
+  async done(buf){ await edApply('record', buf); }
+};
+function edRecord(){
+  if (ED.preCancel) return ED.preCancel();
+  if (recording) return ui === EDIT_UI ? stopRec() : undefined;
+  if (arming || ED.busy) return;
+  if (!ED.sel && ED.cursor == null) return edRender('Select a sentence, or click a point to insert at, first');
+  edStop(); startRec(EDIT_UI);
+}
+
+function edTrim(x, sr){
+  const { d, n } = frameDbs(x, sr, 10); if (!d.length) return null;
+  const floor = pct(d, .1), top = pct(d, .95), thr = Math.max(floor + 10, top - 30);
+  let i0 = d.findIndex(v => v > thr), i1 = d.length - 1; while (i1 >= 0 && d[i1] <= thr) i1--;
+  if (i0 < 0 || i1 < i0 || top < -60) return null;
+  const a = Math.max(0, (i0 - 12) * n), b = Math.min(x.length, (i1 + 15) * n);
+  return x.slice(a, b);
+}
+function edFade(x, atStart, atEnd, sr){
+  const f = Math.min(Math.round(sr*0.015), Math.floor(x.length/2));
+  for (let i = 0; i < f; i++){ const g = i / f; if (atStart) x[i] *= g; if (atEnd) x[x.length - 1 - i] *= g; }
+  return x;
+}
+
+async function edApply(kind, buf){
+  const ad = ED.ad, sr = ad.sr, psr = ad.procSr;
+  let a, b, ins = null;
+  if (ED.sel){ a = edToRaw(ED.sel[0]); b = edToRaw(ED.sel[1]); } else if (ED.cursor != null){ a = b = edToRaw(ED.cursor); } else return;
+  if (kind === 'record'){
+    let x = toMono(buf);
+    if (buf.sampleRate !== sr) x = await resampleTo(x, buf.sampleRate, sr);
+    removeDC(x);
+    x = edTrim(x, sr);
+    if (!x) return edRender('No voice was picked up. Check the microphone and try again.');
+    const ref = b - a > sr*0.3 ? speechLevel(ad.raw.subarray(a, b), sr) : -Infinity;
+    const refLv = isFinite(ref) ? ref : speechLevel(ad.raw, sr), newLv = speechLevel(x, sr);
+    if (isFinite(refLv) && isFinite(newLv)){ const g = dbToLin(Math.max(-12, Math.min(12, refLv - newLv))); for (let i = 0; i < x.length; i++) x[i] *= g; }
+    ins = edFade(x, true, true, sr);
+  }
+  const left = edFade(ad.raw.slice(0, a), false, true, sr), right = edFade(ad.raw.slice(b), true, false, sr);
+  const out = new Float32Array(left.length + (ins ? ins.length : 0) + right.length);
+  out.set(left, 0); if (ins) out.set(ins, left.length); out.set(right, left.length + (ins ? ins.length : 0));
+
+  const pad = psr * 0.3, oldLen = ad.proc.length;
+  const bRange = ED.sel ? [ED.sel[0] - pad, ED.sel[1] + pad] : [ED.cursor - psr*0.6, ED.cursor + psr*0.6];
+  ED.hist.push({ raw: ad.raw, proc: ad.proc, map: ad.map });
+  const beforeProc = ad.proc;
+  ED.busy = true; edStop(); edRender(kind === 'delete' ? 'Removing…' : 'Splicing in the new part and cleaning it…');
+  try { await ad.commit(out); }
+  catch(e){ console.error(e); ED.busy = false; ED.hist.pop(); return edRender('Something went wrong: ' + e.message); }
+  ED.busy = false;
+  const wasSel = !!ED.sel;
+  const p0 = edToProc(left.length), p1 = edToProc(left.length + (ins ? ins.length : 0));
+  ED.last = { beforeProc, bRange: [Math.max(0, bRange[0]), Math.min(oldLen, bRange[1])],
+              aRange: [Math.max(0, p0 - (ins ? pad : psr*0.6)), Math.min(ad.proc.length, p1 + (ins ? pad : psr*0.6))] };
+  ED.sel = ins ? [p0, p1] : null; ED.cursor = ins ? null : p0;
+  edPrepare();
+  edRender((kind === 'delete' ? 'Removed' : wasSel ? 'Replaced' : 'Inserted') + '. Press ▶ Before / ▶ After to compare, or Undo.');
+}
+function edUndo(){
+  if (!ED.hist.length || ED.busy || recording) return;
+  edStop(); const h = ED.hist.pop(); ED.ad.restore(h); ED.last = null; ED.sel = null; ED.cursor = null;
+  edPrepare(); edRender('Undone.');
+}
+
+// ---------- drawing ----------
+function edDraw(){
+  const cv = $('#edCanvas'), wrap = $('#edScroll'); if (!ED.ad || !ED.ad.proc) return;
+  const x = ED.ad.proc, sr = ED.ad.procSr, dur = x.length / sr;
+  const W = Math.max(wrap.clientWidth, Math.round(dur * ED.pxPerSec)), H = 190, dpr = window.devicePixelRatio || 1;
+  if (cv.width !== Math.round(W*dpr) || cv.height !== H*dpr){ cv.width = Math.round(W*dpr); cv.height = H*dpr; cv.style.width = W + 'px'; }
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+  const X = p => p / x.length * W, band = 26, top = band + 6, wh = H - top - 18, mid = top + wh/2;
+  // sentence blocks
+  g.font = '600 11px Inter, sans-serif';
+  ED.blocks.forEach(([a, b], k) => {
+    const on = ED.sel && Math.abs(ED.sel[0] - a) < sr*0.02 && Math.abs(ED.sel[1] - b) < sr*0.02;
+    g.fillStyle = on ? '#1A73E8' : '#DDE1E6'; const x0 = X(a) + 1, w = Math.max(6, X(b) - X(a) - 2);
+    g.beginPath(); g.roundRect ? g.roundRect(x0, 4, w, band - 6, 6) : g.rect(x0, 4, w, band - 6); g.fill();
+    if (w > 16){ g.fillStyle = on ? '#fff' : '#3C4043'; g.fillText(String(k + 1), x0 + 6, 19); }
+  });
+  // selection
+  if (ED.sel){ g.fillStyle = 'rgba(26,115,232,.14)'; g.fillRect(X(ED.sel[0]), top, X(ED.sel[1]) - X(ED.sel[0]), wh); g.fillStyle = '#1A73E8'; g.fillRect(X(ED.sel[0]) - 1, top, 2, wh); g.fillRect(X(ED.sel[1]) - 1, top, 2, wh); }
+  // waveform
+  g.fillStyle = '#8A9099'; const step = x.length / W;
+  for (let px = 0; px < W; px++){
+    let mx = 0; const a = Math.floor(px*step), b = Math.min(x.length, Math.floor((px + 1)*step));
+    for (let i = a; i < b; i += 2){ const v = x[i] < 0 ? -x[i] : x[i]; if (v > mx) mx = v; }
+    const h = Math.max(1, mx * wh/2); g.fillRect(px, mid - h, 1, h*2);
+  }
+  // seconds
+  g.fillStyle = '#5F6368'; g.font = '10px Inter, sans-serif';
+  const tick = dur > 60 ? 5 : 1;
+  for (let t = 0; t <= dur; t += tick){ const px = Math.round(t / dur * W); g.fillRect(px, H - 14, 1, 5); if (t % (tick*5) === 0 || tick === 5) g.fillText(fmtT(t).replace(/\.\d$/, ''), px + 3, H - 3); }
+  if (ED.cursor != null && !ED.sel){ g.fillStyle = '#202124'; g.fillRect(X(ED.cursor) - 1, top - 4, 2, wh + 8); }
+  const ph = edPlayhead(); if (ph != null){ g.fillStyle = '#E66859'; g.fillRect(X(ph) - 1, top, 2, wh); }
+}
+function edRender(msg){
+  if (!ED.open) return;
+  const sr = ED.ad && ED.ad.procSr, rec = recording && ui === EDIT_UI, arm = arming && ui === EDIT_UI, pre = !!ED.preCancel;
+  const st = $('#edStatus'); st.classList.toggle('rec', rec);
+  if (ED.ad && ED.ad.proc) $('#edSub').textContent = fmtT(ED.ad.proc.length / sr) + ' · ' + ED.blocks.length + ' sentences found';
+  let info = '';
+  if (ED.sel){ const k = ED.blocks.findIndex(([a, b]) => Math.abs(ED.sel[0] - a) < sr*0.02 && Math.abs(ED.sel[1] - b) < sr*0.02); info = (k >= 0 ? 'Sentence ' + (k + 1) + ' · ' : 'Selection · ') + fmtT(ED.sel[0]/sr) + ' – ' + fmtT(ED.sel[1]/sr) + ' (' + ((ED.sel[1] - ED.sel[0])/sr).toFixed(1) + ' s)'; }
+  else if (ED.cursor != null) info = 'Insert point at ' + fmtT(ED.cursor/sr);
+  else info = 'Nothing selected';
+  st.textContent = rec ? '● Recording… say the sentence, then press Space or Stop' : (pre ? 'Pre-roll… start speaking as soon as it stops' : (msg || info));
+  const hasSel = !!ED.sel, hasPt = ED.cursor != null, lock = ED.busy || rec || arm;
+  $('#edRec').textContent = rec || pre ? '■ Stop' : arm ? 'Starting…' : hasSel ? '● Re-record selection' : '● Record & insert here';
+  $('#edRec').classList.toggle('del', rec || pre);
+  $('#edRec').disabled = ED.busy || (!hasSel && !hasPt && !rec);
+  $('#edPlay').textContent = ED.src && ED.live && !pre ? '■ Stop' : hasSel ? '▶ Play selection' : '▶ Play from here';
+  $('#edPlay').disabled = lock || pre;
+  $('#edDel').disabled = lock || !hasSel;
+  $('#edUndo').disabled = lock || !ED.hist.length;
+  $('#edBefore').disabled = $('#edAfter').disabled = lock || !ED.last;
+  $('#edDone').disabled = lock;
+  edDraw();
+}
+
+// ---------- interaction ----------
+(() => {
+  const cv = $('#edCanvas');
+  const pos = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top, p: Math.max(0, Math.min(ED.len, (e.clientX - r.left) / r.width * ED.len)) }; };
+  cv.addEventListener('pointerdown', e => {
+    if (!ED.ad || ED.busy || recording || arming) return;
+    const q = pos(e);
+    if (q.y < 28){ const b = ED.blocks.find(([a, c]) => q.p >= a && q.p <= c); if (b){ ED.sel = [b[0], b[1]]; ED.cursor = null; edStop(); } return; }
+    ED.drag = { x: q.x, p: q.p }; cv.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!ED.drag) return; const q = pos(e);
+    if (Math.abs(q.x - ED.drag.x) > 4){ ED.sel = [Math.min(ED.drag.p, q.p), Math.max(ED.drag.p, q.p)]; ED.cursor = null; edRender(); }
+  });
+  const up = e => {
+    if (!ED.drag) return; const q = pos(e), moved = Math.abs(q.x - ED.drag.x) > 4; ED.drag = null;
+    if (!moved){ ED.sel = null; ED.cursor = edSnap(q.p); }
+    else { const a = edSnap(ED.sel[0]), b = edSnap(ED.sel[1]); ED.sel = b - a > ED.ad.procSr*0.1 ? [a, b] : null; }
+    edStop();
+  };
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  cv.addEventListener('dblclick', e => { const q = pos(e); const b = ED.blocks.find(([a, c]) => q.p >= a && q.p <= c); if (b){ ED.sel = [b[0], b[1]]; ED.cursor = null; edRender(); } });
+})();
+function edTogglePlay(){
+  if (ED.src && ED.live) return edStop();
+  const sr = ED.ad.procSr;
+  if (ED.sel) edPlayArr(ED.ad.proc, sr, ED.sel[0], ED.sel[1], true);
+  else edPlayArr(ED.ad.proc, sr, ED.cursor || 0, ED.ad.proc.length, true);
+}
+function edKey(e){
+  if (e.code === 'Space'){ e.preventDefault(); if (recording || ED.preCancel) return edRecord(); if (!ED.busy && !arming) edTogglePlay(); }
+  else if (e.code === 'Escape'){ e.preventDefault(); edClose(); }
+}
+$('#edPlay').onclick = edTogglePlay;
+$('#edRec').onclick = edRecord;
+$('#edDel').onclick = () => { if (ED.sel && !ED.busy) edApply('delete'); };
+$('#edUndo').onclick = edUndo;
+$('#edBefore').onclick = () => { if (ED.last) edPlayArr(ED.last.beforeProc, ED.ad.procSr, ED.last.bRange[0], ED.last.bRange[1], false); };
+$('#edAfter').onclick = () => { if (ED.last) edPlayArr(ED.ad.proc, ED.ad.procSr, ED.last.aRange[0], ED.last.aRange[1], true); };
+$('#edDone').onclick = edClose;
+$('#edPre').onchange = e => { try { localStorage.setItem('vc_ed_pre', e.target.checked ? '1' : '0'); } catch(_){} };
+$('#edSnap').onchange = e => { try { localStorage.setItem('vc_ed_snap', e.target.checked ? '1' : '0'); } catch(_){} };
+$('#nEdit').onclick = () => { const s = curSlide(); if (hasTake(s)) edOpen(edAdapterSlide(s)); };
+window.addEventListener('resize', () => { if (ED.open) edDraw(); });
+</script>
+
 
 
 </body>
