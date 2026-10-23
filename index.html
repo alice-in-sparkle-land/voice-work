@@ -361,6 +361,7 @@ kbd{font:600 11px Inter,sans-serif;background:var(--panel);border:1px solid var(
         <div style="flex:1;min-width:220px"><div class="st" id="syAName" style="font-weight:600"></div><div class="lab" id="syAInfo"></div></div>
         <div class="actions">
           <button class="btn pri" id="syALoad">Load audio file…</button>
+          <button class="btn" id="syEdit">Edit sentences</button>
         </div>
       </div>
       <div class="lab" style="margin-top:8px">Your audio is used exactly as recorded: no noise removal, no volume changes, no cuts. Background music, if you add it below, is mixed underneath.</div>
@@ -441,7 +442,7 @@ kbd{font:600 11px Inter,sans-serif;background:var(--panel);border:1px solid var(
       <label><input type="checkbox" id="edPre"> Pre-roll: play 2.5 s before the selection, then start recording</label>
       <label><input type="checkbox" id="edSnap"> Snap edges to pauses</label>
     </div>
-    <div class="lab" style="margin-top:8px">Shortcuts: <kbd>Space</kbd> play / stop, or stop recording · <kbd>Esc</kbd> close. The new part is cleaned with the current Voice processing settings and matched in volume to the original.</div>
+    <div class="lab" style="margin-top:8px">Shortcuts: <kbd>Space</kbd> play / stop, or stop recording · <kbd>Esc</kbd> close. <span id="edNote"></span></div>
   </div>
 </div>
 
@@ -1720,7 +1721,7 @@ async function syLoadFile(f){
   let bytes;
   try { bytes = await f.arrayBuffer(); await syDecode(bytes); }
   catch(e){ SY.cleaning = false; syRender(); return alert('Could not read ' + f.name + ': ' + (e.message || e)); }
-  SY.name = f.name; SY.bytes = bytes; SY.marks = []; SY.projKey = NS.key; sySaveMarks();
+  SY.name = f.name; SY.bytes = bytes; SY.edited = false; SY.marks = []; SY.projKey = NS.key; sySaveMarks();
   try { await dbSet('sync', { name: f.name, bytes }); } catch(e){ syWarn(e); }
   syRender();
 }
@@ -1967,10 +1968,11 @@ function syRender(){
   $('#sySub').textContent = syN() + ' slides · ' + NS.W + '×' + NS.H;
   if (!SY.cleaning){
     $('#syAName').textContent = SY.proc ? SY.name : 'No audio loaded';
-    $('#syAInfo').textContent = SY.proc ? 'Original audio, unchanged · ' + fmtT(syDur()) + (SY.L !== SY.R ? ' · stereo' : '') + ' · ' + SY.gaps.length + ' pauses found' : 'Load your full recording (MP3, M4A, WAV, OGG…). It is used exactly as recorded.';
+    $('#syAInfo').textContent = SY.proc ? (SY.edited ? 'Original audio, edited by sentence · ' : 'Original audio, unchanged · ') + fmtT(syDur()) + (SY.L !== SY.R ? ' · stereo' : '') + ' · ' + SY.gaps.length + ' pauses found' : 'Load your full recording (MP3, M4A, WAV, OGG…). It is used exactly as recorded.';
   } else $('#syAName').textContent = SY.name;
   $('#syALoad').textContent = SY.proc ? 'Replace audio…' : 'Load audio file…';
   $('#syALoad').disabled = SY.cleaning;
+  $('#syEdit').disabled = !SY.proc || SY.cleaning || NS.exporting;
   $('#syVideo').disabled = $('#syTimings').disabled = !SY.proc || SY.cleaning || NS.exporting;
   $('#syTimingsLoad').disabled = !SY.proc || SY.cleaning;
   $('#syDelay').value = SY.delay; $('#syDelayv').textContent = SY.delay.toFixed(2) + ' s';
@@ -2047,7 +2049,7 @@ $('#syTIn').onchange = async e => {
     const mk = await dbGet('syncMarks');
     if (mk){ SY.marks = mk.marks || []; SY.delay = mk.delay ?? 0.25; SY.snap = mk.snap ?? true; SY.zoom = mk.zoom || 30; SY.projKey = mk.projKey || null; }
     const a = await dbGet('sync');
-    if (a && a.bytes){ SY.name = a.name || 'audio'; SY.bytes = a.bytes; await syDecode(a.bytes); }
+    if (a && a.bytes){ SY.name = a.name || 'audio'; SY.bytes = a.bytes; SY.edited = !!a.edited; await syDecode(a.bytes); }
     if (NS.key && SY.projKey && SY.projKey !== NS.key){ SY.marks = []; SY.projKey = NS.key; sySaveMarks(); }
   } catch(e){ console.warn('sync restore failed', e); }
   syRender();
@@ -2104,6 +2106,7 @@ async function edOpen(ad){
   try { $('#edPre').checked = localStorage.getItem('vc_ed_pre') !== '0'; $('#edSnap').checked = localStorage.getItem('vc_ed_snap') !== '0'; }
   catch(e){ $('#edPre').checked = true; $('#edSnap').checked = true; }
   $('#edTitle').textContent = 'Edit sentences · ' + ad.label;
+  $('#edNote').textContent = ad.note || 'The new part is cleaned with the current Voice processing settings and matched in volume to the original.';
   $('#edModal').hidden = false;
   if (!ad.map){ ED.busy = true; edRender('Preparing the take…'); await ad.ensure(); ED.busy = false; }
   edPrepare(); edRender();
@@ -2236,20 +2239,23 @@ async function edApply(kind, buf){
     if (isFinite(refLv) && isFinite(newLv)){ const g = dbToLin(Math.max(-12, Math.min(12, refLv - newLv))); for (let i = 0; i < x.length; i++) x[i] *= g; }
     ins = edFade(x, true, true, sr);
   }
-  const left = edFade(ad.raw.slice(0, a), false, true, sr), right = edFade(ad.raw.slice(b), true, false, sr);
-  const out = new Float32Array(left.length + (ins ? ins.length : 0) + right.length);
-  out.set(left, 0); if (ins) out.set(ins, left.length); out.set(right, left.length + (ins ? ins.length : 0));
+  let out = null;
+  if (!ad.splice){
+    const left = edFade(ad.raw.slice(0, a), false, true, sr), right = edFade(ad.raw.slice(b), true, false, sr);
+    out = new Float32Array(left.length + (ins ? ins.length : 0) + right.length);
+    out.set(left, 0); if (ins) out.set(ins, left.length); out.set(right, left.length + (ins ? ins.length : 0));
+  }
 
   const pad = psr * 0.3, oldLen = ad.proc.length;
   const bRange = ED.sel ? [ED.sel[0] - pad, ED.sel[1] + pad] : [ED.cursor - psr*0.6, ED.cursor + psr*0.6];
-  ED.hist.push({ raw: ad.raw, proc: ad.proc, map: ad.map });
+  ED.hist.push(ad.snapshot ? ad.snapshot() : { raw: ad.raw, proc: ad.proc, map: ad.map });
   const beforeProc = ad.proc;
-  ED.busy = true; edStop(); edRender(kind === 'delete' ? 'Removing…' : 'Splicing in the new part and cleaning it…');
-  try { await ad.commit(out); }
+  ED.busy = true; edStop(); edRender(kind === 'delete' ? 'Removing…' : ad.splice ? 'Splicing in the new part…' : 'Splicing in the new part and cleaning it…');
+  try { if (ad.splice) await ad.splice(a, b, ins); else await ad.commit(out); }
   catch(e){ console.error(e); ED.busy = false; ED.hist.pop(); return edRender('Something went wrong: ' + e.message); }
   ED.busy = false;
   const wasSel = !!ED.sel;
-  const p0 = edToProc(left.length), p1 = edToProc(left.length + (ins ? ins.length : 0));
+  const p0 = edToProc(a), p1 = edToProc(a + (ins ? ins.length : 0));
   ED.last = { beforeProc, bRange: [Math.max(0, bRange[0]), Math.min(oldLen, bRange[1])],
               aRange: [Math.max(0, p0 - (ins ? pad : psr*0.6)), Math.min(ad.proc.length, p1 + (ins ? pad : psr*0.6))] };
   ED.sel = ins ? [p0, p1] : null; ED.cursor = ins ? null : p0;
@@ -2360,6 +2366,46 @@ $('#edDone').onclick = edClose;
 $('#edPre').onchange = e => { try { localStorage.setItem('vc_ed_pre', e.target.checked ? '1' : '0'); } catch(_){} };
 $('#edSnap').onchange = e => { try { localStorage.setItem('vc_ed_snap', e.target.checked ? '1' : '0'); } catch(_){} };
 $('#nEdit').onclick = () => { const s = curSlide(); if (hasTake(s)) edOpen(edAdapterSlide(s)); };
+
+// Sync to audio: the long recording, used as recorded (stereo kept, no cleaning).
+function edAdapterSync(){
+  const SR = SR_OUT;
+  const splice1 = (x, a, b, ins) => {
+    const left = edFade(x.slice(0, a), false, true, SR), right = edFade(x.slice(b), true, false, SR);
+    const out = new Float32Array(left.length + (ins ? ins.length : 0) + right.length);
+    out.set(left, 0); if (ins) out.set(ins, left.length); out.set(right, left.length + (ins ? ins.length : 0));
+    return out;
+  };
+  const persist = async () => {
+    SY.bytes = encodeWav2(SY.L, SY.R, SR).buffer; SY.edited = true;
+    try { await dbSet('sync', { name: SY.name, bytes: SY.bytes, edited: true }); } catch(e){ syWarn(e); }
+    sySaveMarks();
+  };
+  const rebuild = () => {
+    if (SY.L === SY.R) SY.proc = SY.L;
+    else { SY.proc = new Float32Array(SY.L.length); for (let i = 0; i < SY.L.length; i++) SY.proc[i] = 0.5*(SY.L[i] + SY.R[i]); }
+    syPrepare(); SY.shown = -1; syRender();
+  };
+  return {
+    label: 'Full audio · ' + SY.name,
+    note: 'The new part is used as recorded (no cleaning), matched in volume to the original. Slide markers after the edit move with it.',
+    get raw(){ return SY.proc; }, get sr(){ return SR; }, get proc(){ return SY.proc; }, get procSr(){ return SR; },
+    get map(){ return [[0, SY.proc.length]]; }, busy: () => SY.cleaning,
+    async ensure(){},
+    snapshot(){ return { L: SY.L, R: SY.R, marks: SY.marks.slice(), bytes: SY.bytes }; },
+    async splice(a, b, ins){
+      syStop();
+      const mono = SY.L === SY.R;
+      SY.L = splice1(SY.L, a, b, ins); SY.R = mono ? SY.L : splice1(SY.R, a, b, ins);
+      const delta = ((ins ? ins.length : 0) - (b - a)) / SR, ta = a / SR, tb = b / SR, tNew = (a + (ins ? ins.length : 0)) / SR;
+      SY.marks = SY.marks.map(m => m >= tb ? m + delta : m > ta ? Math.min(m, tNew) : m);
+      for (let i = 1; i < SY.marks.length; i++) if (SY.marks[i] < SY.marks[i-1] + 0.3) SY.marks[i] = SY.marks[i-1] + 0.3;
+      rebuild(); await persist();
+    },
+    restore(h){ syStop(); SY.L = h.L; SY.R = h.R; SY.marks = h.marks; SY.bytes = h.bytes; rebuild(); dbSet('sync', { name: SY.name, bytes: SY.bytes, edited: SY.edited }).catch(syWarn); sySaveMarks(); }
+  };
+}
+$('#syEdit').onclick = () => { if (SY.proc && !SY.cleaning){ syStop(); edOpen(edAdapterSync()); } };
 window.addEventListener('resize', () => { if (ED.open) edDraw(); });
 </script>
 
